@@ -17,15 +17,15 @@ sources:
     tier: 1
     kind: research
   - name: Cisco Security Advisories
-    url: https://tools.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml
+    url: https://sec.cloudapps.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml
     tier: 0
     kind: primary
   - name: Fortinet PSIRT
-    url: https://www.fortiguard.com/rss/ir.xml
+    url: https://filestore.fortinet.com/fortiguard/rss/ir.xml
     tier: 0
     kind: primary
   - name: Google Threat Intelligence / Mandiant
-    url: https://cloud.google.com/blog/topics/threat-intelligence/rss/
+    url: https://feeds.feedburner.com/threatintelligence/pvexyqv7v0v
     tier: 1
     kind: research
   - name: The Record

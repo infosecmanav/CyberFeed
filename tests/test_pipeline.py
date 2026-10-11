@@ -77,3 +77,26 @@ def test_weekly_digest_preserves_attribution_and_excerpts():
         original = next(s for s in weekly["stories"] if s["url"] == update["url"])
         assert update["excerpt"] == original["summary"]
         assert update["source"] == original["source"]
+
+
+def test_kev_uses_official_mirror_when_cisa_site_fails(monkeypatch):
+    import io, json
+    from urllib.error import HTTPError
+    from cyberbrief.ingest import fetch_cisa_kev
+    calls = []
+    def response(request, timeout):
+        calls.append(request.full_url)
+        if len(calls) == 1:
+            raise HTTPError(request.full_url, 403, "Denied", {}, None)
+        return io.BytesIO(json.dumps({"vulnerabilities": [{"cveID": "CVE-2026-12345"}]}).encode())
+    monkeypatch.setattr("urllib.request.urlopen", response)
+    assert "CVE-2026-12345" in fetch_cisa_kev()
+    assert calls[1] == "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+
+
+def test_kev_does_not_accept_an_empty_catalog(monkeypatch):
+    import io, pytest
+    from cyberbrief.ingest import fetch_cisa_kev
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: io.BytesIO(b'{"vulnerabilities": []}'))
+    with pytest.raises(RuntimeError, match="Both official"):
+        fetch_cisa_kev()

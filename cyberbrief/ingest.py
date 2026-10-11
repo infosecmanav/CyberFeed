@@ -46,6 +46,8 @@ def fetch_feeds(sources, timeout=15):
             with urllib.request.urlopen(request, timeout=timeout) as response:
                 raw = response.read()
             root = ET.fromstring(raw)
+            if root.tag.split("}")[-1] not in ("rss", "feed", "RDF"):
+                raise ValueError("Source returned XML that is not an RSS or Atom feed")
             entries = root.findall(".//item")
             # Atom feeds use a namespace; local-name handling keeps this dependency-free.
             if not entries:
@@ -80,11 +82,28 @@ def fetch_feeds(sources, timeout=15):
 
 
 def fetch_cisa_kev(timeout=20):
-    url = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
-    request = urllib.request.Request(url, headers={"User-Agent": "CyberBrief/0.1"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        data = json.loads(response.read().decode("utf-8"))
-    return {item["cveID"].upper(): item for item in data.get("vulnerabilities", []) if item.get("cveID")}
+    # Both locations are published by CISA; the GitHub mirror works when
+    # cisa.gov's edge service rejects this cloud instance.
+    urls = (
+        "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json",
+        "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json",
+    )
+    last_error = None
+    for url in urls:
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "CyberBrief/0.1"})
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            items = data["vulnerabilities"]
+            if not isinstance(items, list) or not items:
+                raise ValueError("CISA KEV catalog has no vulnerability records")
+            catalog = {item["cveID"].upper(): item for item in items if item.get("cveID")}
+            if not catalog:
+                raise ValueError("CISA KEV catalog has no CVE identifiers")
+            return catalog
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            last_error = exc
+    raise RuntimeError("Both official CISA KEV catalog locations are unavailable") from last_error
 
 
 def fixture_stories():
