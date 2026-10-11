@@ -10,7 +10,7 @@ class BuildRequest(BaseModel):
     period: str = "daily"
     api_key: str = Field(default="", max_length=300)
     model: str = Field(default="gpt-4.1-mini", max_length=100)
-    demo: bool = True
+    demo: bool = False
 @app.get("/")
 def index(): return FileResponse(ROOT / "web/index.html")
 @app.post("/api/briefing")

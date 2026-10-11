@@ -63,3 +63,17 @@ def test_shared_engine_fixture_output_has_no_confidence():
     d=build(fixtures=True)
     assert d["demo"] and d["stories"]
     assert all("confidence" not in s and "score" not in s for s in d["stories"])
+
+
+def test_weekly_digest_preserves_attribution_and_excerpts():
+    from cyberbrief.engine import build
+    daily = build(fixtures=True)
+    weekly = build(period="weekly", fixtures=True)
+    assert daily["weekly_digest"] == []
+    assert weekly["weekly_digest"]
+    updates = [u for group in weekly["weekly_digest"] for u in group["updates"]]
+    assert len(updates) == len(weekly["stories"])
+    for update in updates:
+        original = next(s for s in weekly["stories"] if s["url"] == update["url"])
+        assert update["excerpt"] == original["summary"]
+        assert update["source"] == original["source"]

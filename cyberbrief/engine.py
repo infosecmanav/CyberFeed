@@ -5,6 +5,26 @@ from .ingest import load_sources, fetch_feeds, fetch_cisa_kev, fixture_stories
 from .verify import cluster_stories, score_story
 ROOT = Path(__file__).resolve().parent.parent
 
+def weekly_digest(stories):
+    """Group attributed excerpts without inventing cross-story conclusions."""
+    groups = {}
+    for story in stories:
+        words = (story["title"] + " " + story["summary"]).lower()
+        topic = "Other security updates"
+        for label, terms in (
+            ("Ransomware and extortion", ("ransomware", "extortion")),
+            ("Vulnerabilities and patches", ("cve-", "vulnerability", "patch", "security update")),
+            ("Intrusions and credential theft", ("intrusion", "credential", "phishing", "malware", "campaign")),
+        ):
+            if any(term in words for term in terms):
+                topic = label
+                break
+        groups.setdefault(topic, []).append({
+            "title": story["title"], "source": story["source"],
+            "url": story["url"], "excerpt": story["summary"],
+        })
+    return [{"topic": topic, "updates": updates} for topic, updates in groups.items()]
+
 def validate_claims(claims, evidence):
     accepted = []
     for claim in claims[:3]:
@@ -53,4 +73,5 @@ def build(period="daily", fixtures=False, key=None, model=None):
         for field in ("confidence", "score", "score_parts", "status"): item.pop(field, None)
         item.update(summary=" ".join(c["text"] for c in claims), claims=claims, kev_available=not any(e["source"]=="CISA KEV" for e in errors))
         result.append(item)
-    return {"period": period, "generated": now.isoformat(), "demo": fixtures, "stories": result, "errors": errors}
+    return {"period": period, "generated": now.isoformat(), "demo": fixtures, "stories": result, "errors": errors,
+            "weekly_digest": weekly_digest(result) if period == "weekly" else []}
