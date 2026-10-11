@@ -1,0 +1,18 @@
+sources:
+  - name: CISA
+    url: https://www.cisa.gov/cybersecurity-advisories/all.xml
+    tier: 0
+    kind: primary
+  - name: Canadian Centre for Cyber Security
+    url: https://www.cyber.gc.ca/api/cccs/rss/v1/get?feed=alerts_advisories&lang=en
+    tier: 0
+    kind: primary
+    lens: Canada
+  - name: Microsoft MSRC
+    url: https://api.msrc.microsoft.com/update-guide/rss
+    tier: 0
+    kind: primary
+  - name: Cisco Talos
+    url: https://blog.talosintelligence.com/rss/
+    tier: 1
+    kind: research
