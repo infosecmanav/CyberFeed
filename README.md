@@ -23,6 +23,21 @@ The engine loads SKILL.md for each run and passes its instructions to optional m
 Every published summary is an exact bounded source excerpt. Claim evidence IDs and quotations are retained in JSON. Exact matching prevents invented paraphrases, but does not independently fact-check the source. Feed text can omit context; open the advisory before acting. KEV membership is a separate factual signal, never blanket story verification. No numeric confidence or rank score appears on the website or bot.
 Daily covers 36 hours; weekly covers 7 days, each at most 10 stories. Weekly currently re-ranks stories; it does not generate a thematic editorial digest. Invalid/future dates are skipped. Primary source wording wins when duplicates merge. Audit claims remain available in the API response.
 
+## Source selection
+
+`sources.yaml` configures ten feeds by purpose:
+
+| Purpose | Sources |
+| --- | --- |
+| Government guidance (tier 0) | Canadian Centre for Cyber Security, CISA |
+| Vendor advisories (tier 0) | Microsoft MSRC, Cisco Security Advisories, Fortinet PSIRT |
+| Technical research (tier 1) | Google Threat Intelligence / Mandiant, Cisco Talos |
+| Reporting and discovery (tier 2) | The Record, BleepingComputer, The Hacker News |
+
+Google Threat Intelligence and Mandiant share one feed to avoid adding overlapping streams. CISA KEV separately enriches CVE stories with known-exploitation membership. When duplicates merge, lower-tier-number sources supply the lead wording; evidence links are retained. The reporting layer supports discovery and does not independently verify claims.
+
+The six added feed endpoints could not be verified during cloud setup because the network proxy returned 403. Validate them after applying the saved network allowlist. Government guidance and threat assessments outside the configured alert feeds are not automatically ingested.
+
 ## CLI / checks
 ```bash
 python -m cyberbrief.cli build --fixtures --out site

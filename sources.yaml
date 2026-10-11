@@ -16,3 +16,27 @@ sources:
     url: https://blog.talosintelligence.com/rss/
     tier: 1
     kind: research
+  - name: Cisco Security Advisories
+    url: https://tools.cisco.com/security/center/psirtrss20/CiscoSecurityAdvisory.xml
+    tier: 0
+    kind: primary
+  - name: Fortinet PSIRT
+    url: https://www.fortiguard.com/rss/ir.xml
+    tier: 0
+    kind: primary
+  - name: Google Threat Intelligence / Mandiant
+    url: https://cloud.google.com/blog/topics/threat-intelligence/rss/
+    tier: 1
+    kind: research
+  - name: The Record
+    url: https://therecord.media/feed
+    tier: 2
+    kind: reporting
+  - name: BleepingComputer
+    url: https://www.bleepingcomputer.com/feed/
+    tier: 2
+    kind: reporting
+  - name: The Hacker News
+    url: https://feeds.feedburner.com/TheHackersNews
+    tier: 2
+    kind: reporting

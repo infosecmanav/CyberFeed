@@ -4,6 +4,16 @@ from cyberbrief.verify import cluster_stories, score_story, verify_story
 from cyberbrief.ingest import fixture_stories
 
 
+def test_parse_rss_and_atom_publication_dates():
+    import pytest
+    from cyberbrief.ingest import parse_date
+    expected = datetime(2026, 10, 11, 12, 0, tzinfo=timezone.utc)
+    for value in ("Sun, 11 Oct 2026 12:00:00 GMT", "2026-10-11T12:00:00Z", "2026-10-11T08:00:00-04:00"):
+        assert parse_date(value) == expected
+    with pytest.raises(ValueError):
+        parse_date("invalid")
+
+
 def story(title, source, url, cves=None, tier=2, hours=1):
     return Story(title,url,source,tier,datetime.now(timezone.utc)-timedelta(hours=hours),"test summary",cves=cves or [],evidence=[{"source":source,"url":url,"tier":tier}])
 

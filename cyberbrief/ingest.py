@@ -27,6 +27,13 @@ def parse_date(value):
             return dt.astimezone(timezone.utc)
         except (ValueError, TypeError, OverflowError):
             pass
+        try:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except (ValueError, TypeError, OverflowError):
+            pass
     raise ValueError("Missing or invalid publication date")
 
 
