@@ -148,7 +148,7 @@ def render(payload, summary, theme='dark'):
     body=style('body');heading=style('heading',13,ink,17);meta=style('meta',8,muted,12);title=style('title',28,ink,34)
     heading.keepWithNext = True
     out=BytesIO();doc=SimpleDocTemplate(out,leftMargin=36,rightMargin=36,topMargin=42,bottomMargin=42)
-    flow=[Paragraph('SIGNAL / CYBER BRIEFING',meta),Paragraph('Less noise. Clear next steps.',title),Paragraph('DESIGN PREVIEW · Agent-edited sample; automated AI delivery is not connected.',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
+    flow=[Paragraph('Cyber Feed',title),Paragraph('DESIGN PREVIEW · Agent-edited sample; automated AI delivery is not connected.',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
     if payload.get('demo'):flow.append(Paragraph('FICTIONAL DEMO — not real incidents.',body))
     labels={'context':'WHAT HAPPENED / IMPACT','affected':'AFFECTED PRODUCTS & VERSIONS','action':'PATCHES & RECOMMENDED ACTION','exploitation':'EXPLOITATION STATUS'}
     for index,(source,story) in enumerate(zip(payload['stories'],summary['stories']),1):
@@ -188,7 +188,7 @@ def render(payload, summary, theme='dark'):
         for error in payload['errors']:flow.append(Paragraph(escape(error['source']+': '+error['error']),body))
     flow.append(Paragraph('Evidence quotations are retained in the editorial JSON. Human review is required: exact citation matches alone cannot verify a paraphrase.',meta))
     def page(canvas,document):
-        canvas.setFillColor(background);canvas.rect(0,0,*document.pagesize,fill=1,stroke=0);canvas.setFont('SignalPreview',8);canvas.setFillColor(muted);canvas.drawString(36,22,'SIGNAL · Editorial design preview');canvas.drawRightString(document.pagesize[0]-36,22,str(document.page))
+        canvas.setFillColor(background);canvas.rect(0,0,*document.pagesize,fill=1,stroke=0);canvas.setFont('SignalPreview',8);canvas.setFillColor(muted);canvas.drawRightString(document.pagesize[0]-36,22,str(document.page))
     doc.build(flow,onFirstPage=page,onLaterPages=page)
     return out.getvalue()
 

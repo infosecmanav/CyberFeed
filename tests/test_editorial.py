@@ -37,6 +37,7 @@ def test_unmatched_evidence_and_oversized_output_fail():
 def test_preview_pdf_preserves_summary_links_and_missing_fields(theme):
     p,s=sample();pdf=render(p,s,theme);reader=PdfReader(BytesIO(pdf))
     text='\n'.join(page.extract_text() for page in reader.pages)
+    assert 'Cyber Feed' in text and 'SIGNAL' not in text and 'Less noise.' not in text
     assert 'DESIGN PREVIEW' in text and 'Not supplied: versions' in text
     assert 'FortiMail' in text and 'Lantronix' in text and 'Citrix' in text
     assert any(page.get('/Annots') for page in reader.pages)
