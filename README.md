@@ -4,7 +4,7 @@ Cyber Feed collects cybersecurity updates from government agencies, vendor advis
 
 Scheduled reports run through GitHub Actions. An optional Discord bot supports on-demand reports and per-user format preferences.
 
-> **AI integration status:** the black-and-blue editorial layout and portable agent instructions are available as a preview. Automated AI generation and delivery of that layout are not yet integrated. The scheduled workflow currently delivers source-based reports and does not require an AI API key.
+> **AI is required for report generation and delivery.** Configure your provider key, model, and API settings. Reports use the Cyber Feed black-and-blue layout, with a summary, detailed explanation, and references for each update. Invalid or unavailable AI output stops delivery; it is never silently replaced with a non-AI report.
 
 ## Contents
 
@@ -13,7 +13,7 @@ Scheduled reports run through GitHub Actions. An optional Discord bot supports o
 - [Configuration](#configuration)
 - [Sources and evidence handling](#sources-and-evidence-handling)
 - [Local installation](#local-installation)
-- [AI editorial preview](#ai-editorial-preview)
+- [AI report generation](#ai-report-generation)
 - [Interactive Discord bot](#interactive-discord-bot)
 - [Security and operational considerations](#security-and-operational-considerations)
 - [Troubleshooting](#troubleshooting)
@@ -27,7 +27,7 @@ Scheduled reports run through GitHub Actions. An optional Discord bot supports o
 - A Discord channel where you have permission to create webhooks.
 - GitHub Actions enabled in your fork.
 
-This deployment does not require a continuously running local computer, a Discord bot token, or a personal GitHub API key. GitHub supplies the workflow token used for checkout and artifacts.
+This deployment requires your AI provider key and Discord webhook. It does not require a continuously running local computer, a Discord bot token, or a personal GitHub API key. GitHub supplies the workflow token used for checkout and artifacts.
 
 ### 1. Fork the repository
 
@@ -44,6 +44,9 @@ In your fork, open **Settings → Secrets and variables → Actions → New repo
 | Secret | Value |
 | --- | --- |
 | `DISCORD_WEBHOOK_URL` | The webhook URL for your destination channel |
+| `AI_API_KEY` | Your selected AI provider’s API key |
+
+Create repository Actions variables `AI_PROVIDER` and `AI_MODEL` using the provider configuration below. For a custom OpenAI-compatible service, also set `AI_BASE_URL`.
 
 For scheduled text delivery, also create an Actions **variable** named `BRIEFING_FORMAT` with the value `text`. The default is `pdf`.
 
@@ -82,14 +85,36 @@ GitHub scheduled workflows run from the default branch and may be delayed. Publi
 | `BRIEFING_FORMAT` | GitHub Actions repository variable | `pdf` or `text`; default `pdf` |
 | `DISCORD_BOT_TOKEN` | Local or hosting process environment | Required only for the interactive bot |
 | `CYBERBRIEF_STATE_DIR` | Local or hosting process environment | Persistent directory for bot preferences; default `.state` in the checkout |
-| `OPENAI_API_KEY` | Local or hosting process environment | Optional existing excerpt-selection feature in the interactive bot |
-| `OPENAI_MODEL` | Local or hosting process environment | Model for excerpt selection; default `gpt-4.1-mini` |
+| `AI_API_KEY` | Actions secret or local process environment | Required AI provider key |
+| `AI_PROVIDER` | Actions variable or local process environment | Required provider adapter |
+| `AI_MODEL` | Actions variable or local process environment | Required model identifier available to your account |
+| `AI_BASE_URL` | Actions variable or local process environment | Required for `openai-compatible`; optional override for other compatible adapters |
+| `AI_MAX_OUTPUT_TOKENS` | Actions variable or local process environment | Response budget; default 16384, subject to model limits |
+| `AI_JSON_MODE` | Actions variable or local process environment | `true` by default; set `false` only if the model cannot accept native JSON mode |
 
-The scheduled workflow does not currently consume `OPENAI_API_KEY`; adding that secret does not enable detailed AI reports. Provider access and free-tier availability depend on the selected service. API billing is separate from ChatGPT subscriptions.
+### Provider compatibility
+
+| `AI_PROVIDER` | API interface / default base URL |
+| --- | --- |
+| `gemini` | Native Google Gemini API at `generativelanguage.googleapis.com` |
+| `groq` | OpenAI-compatible API: `https://api.groq.com/openai/v1` |
+| `openrouter` | OpenAI-compatible API: `https://openrouter.ai/api/v1` |
+| `openai-compatible` | Your own HTTPS `AI_BASE_URL`, ending at the API base (for example `/v1`) |
+| `openai` | OpenAI-compatible API: `https://api.openai.com/v1` |
+
+Choose a model your account can access, using its exact provider model ID. Free models and quotas depend on the service and account; this application cannot make a paid model free. Gemini, Groq, and OpenRouter can be configured with available free-tier models. Other services work when they support the OpenAI chat-completions interface. Native APIs with a different protocol require another adapter; an API key alone does not establish compatibility.
+
+Generate your key in the provider console: [Google AI Studio](https://aistudio.google.com/app/apikey), [Groq](https://console.groq.com/keys), or [OpenRouter](https://openrouter.ai/settings/keys). Verify current pricing, model availability, output limits, and quotas there. No model is hardcoded or automatically substituted. Keys must match their provider; a Gemini key cannot authenticate to Groq, for example.
+
+A single batch request processes all selected stories. Authentication, rate-limit, incomplete-response, JSON, and citation failures stop the workflow before delivery. There are no automatic paid/quota-consuming retries. If the provider rejects native JSON mode, set `AI_JSON_MODE=false`; output must still parse as JSON and pass all evidence checks. Increase/decrease the output budget only within the selected model’s supported limits.
+
+Existing installations should replace `OPENAI_API_KEY`/`OPENAI_MODEL` with `AI_API_KEY`/`AI_MODEL` and set `AI_PROVIDER`. The old optional excerpt-selection integration has been removed.
 
 [.env.example](.env.example) contains empty credential placeholders. A local `.env` file is ignored by Git, but **is not automatically loaded**. Export variables through your shell or hosting secret manager. Never commit credentials or populate `.env.example` with real secrets.
 
 ## Sources and evidence handling
+
+The single AI instruction file is [SKILL.md](SKILL.md). `SKILLS.md` has been removed; there are no separate, conflicting excerpt and detailed-report prompts.
 
 The source registry is [sources.yaml](sources.yaml).
 
@@ -136,22 +161,45 @@ source .venv/bin/activate
 .venv\Scripts\Activate.ps1
 ```
 
-Install dependencies and generate a report:
+Install dependencies and export your AI configuration. For macOS zsh, use a hidden key prompt (replace the provider and model with your account's settings):
+
+```zsh
+python -m pip install -r requirements.txt
+read -s "AI_API_KEY?AI provider key: "
+echo
+export AI_API_KEY
+export AI_PROVIDER="gemini"
+export AI_MODEL="YOUR-MODEL-ID"
+```
+
+For Windows PowerShell:
+
+```powershell
+python -m pip install -r requirements.txt
+$secureKey = Read-Host "AI provider key" -AsSecureString
+$env:AI_API_KEY = [System.Net.NetworkCredential]::new("", $secureKey).Password
+$env:AI_PROVIDER = "gemini"
+$env:AI_MODEL = "YOUR-MODEL-ID"
+```
+
+Generate the report:
 
 ```bash
 python -m pip install -r requirements.txt
 python -m cyberbrief.cli build --period weekly --scheduled-window --format all --strict --out site
 ```
 
-The output directory contains `briefing.json`, `briefing.txt`, and `briefing.pdf`. No Discord credential is required for local generation.
+The output directory contains `briefing.json`, `briefing.txt`, and `briefing.pdf`. No Discord credential is required for local generation, but the AI key/provider/model are required.
 
 `--strict` returns exit status 2 when coverage errors exist, while retaining diagnostic output. Without that flag, partial reports include explicit warnings. The scheduled workflow sends partial reports with those warnings; unexpected build or delivery errors fail the job.
 
+`--source-only` is an explicit diagnostic mode for collecting factual evidence without an AI call. It is not the scheduled delivery mode. `--fixtures` also bypasses AI for fictional offline tests.
+
 Without `--scheduled-window`, reports use rolling windows of 36 hours for daily and seven days for weekly. `--fixtures` generates clearly labeled fictional demonstration data.
 
-## AI editorial preview
+## AI report generation
 
-The proposed editorial report repeats the following structure **for each update**:
+The AI report repeats the following structure **for each update**:
 
 **a. AI summary** — concise, evidence-supported bullets.
 
@@ -161,13 +209,13 @@ The proposed editorial report repeats the following structure **for each update*
 
 Diagrams are optional. They are included only when they improve understanding and the evidence supports every step and relationship. A generic attack chain must not be inserted to fill missing information.
 
-The preview uses a black background, blue accents, and light text; a light version is available for printing.
+The report uses a black background, blue accents, and light text; a light version is available for printing.
 
 - [Dark PDF sample](docs/editorial-preview/dark.pdf)
 - [Light PDF sample](docs/editorial-preview/light.pdf)
 - [First-page preview](docs/editorial-preview/dark-preview.png)
 - [Evidence and sample output](docs/editorial-preview/README.md)
-- [Portable agent instructions](SKILLS.md)
+- [Portable agent instructions](SKILL.md)
 
 These samples use historical evidence and are not newly fetched reports. Download PDFs through GitHub's download/raw control.
 
@@ -175,13 +223,13 @@ To prepare and render agent output locally:
 
 ```bash
 python -m cyberbrief.editorial pack --input site/briefing.json --output evidence.json
-# Supply SKILLS.md and evidence.json to your chosen agent; save its JSON as summary.json.
+# Supply SKILL.md and evidence.json to your chosen agent; save its JSON as summary.json.
 python -m cyberbrief.editorial render --input evidence.json --summary summary.json --output preview.pdf --theme dark
 ```
 
 Use `--theme light` for print styling. Full supplied evidence is retained by default; `--detail-level compact` reduces input size but may omit material detail. Upstream excerpts may already be truncated.
 
-Validation checks structure, evidence IDs, exact quotations, and diagram relationships. These checks do not establish that every paraphrase follows from its citation; semantic review remains necessary. The tool does not invoke a provider or publish editorial output automatically.
+Validation checks structure, evidence IDs, exact quotations, and diagram relationships. These checks do not establish that every paraphrase follows from its citation; semantic review remains necessary. The standalone `pack`/`render` commands support manual editorial review; standard report generation invokes the configured provider and validates its output before rendering.
 
 ## Interactive Discord bot
 
@@ -189,7 +237,7 @@ The bot is optional and separate from scheduled webhook delivery. It requires a 
 
 1. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications).
 2. Invite it with `bot` and `applications.commands` scopes and **View Channels**, **Send Messages**, and **Attach Files** permissions. Privileged message-content intent is unnecessary.
-3. Export `DISCORD_BOT_TOKEN` securely and start the bot.
+3. Export `AI_API_KEY`, `AI_PROVIDER`, `AI_MODEL`, and `DISCORD_BOT_TOKEN` securely, then start the bot. The bot checks AI configuration before connecting.
 
 For macOS zsh:
 
@@ -232,6 +280,8 @@ Responses are private to the requesting user. Preferences are stored in `.state/
 | Symptom | Action |
 | --- | --- |
 | `No module named discord` | Activate `.venv` and install `requirements.txt` with its Python interpreter. |
+| AI configuration missing | Set `AI_API_KEY`, `AI_PROVIDER`, and `AI_MODEL`; `.env` is not auto-loaded. |
+| AI response rejected | Check the model’s JSON support and output budget. Unsupported citations or versions must be corrected, not bypassed. |
 | Token missing despite `.env` | Export the variable; `.env` is not auto-loaded. |
 | Bot does not return to the prompt | A connected bot runs continuously. Check gateway connection logs or the reported error. |
 | Slash command unavailable | Verify server installation, command scope, bot process, and synchronization. |
@@ -254,4 +304,4 @@ python -m pytest -q
 python -m cyberbrief.cli build --fixtures --period weekly --format all --strict --out site
 ```
 
-Tests cover extraction, source selection, checksum verification, schedule boundaries and daylight saving changes, preferences, report rendering, editorial citations, optional diagrams, and mocked Discord delivery. Verify live delivery using the configured destination and credentials; mocked tests do not establish successful external delivery.
+Provider-adapter and rendering tests use mocked API responses; a credentialed provider test is still required in your installation. Tests cover extraction, source selection, checksum verification, schedule boundaries and daylight saving changes, preferences, report rendering, editorial citations, optional diagrams, and mocked Discord delivery. Verify live delivery using the configured destination and credentials; mocked tests do not establish successful external delivery.

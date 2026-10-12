@@ -1,4 +1,4 @@
-import json, os
+import json
 from concurrent.futures import ThreadPoolExecutor
 from .details import enrich
 from pathlib import Path
@@ -38,16 +38,6 @@ def validate_claims(claims, evidence):
             accepted.append({"text": text, "evidence_id": eid, "quote": quote, "scope": "Source reports"})
     return accepted if sum(len(c["text"].split()) for c in accepted) <= 60 else []
 
-def extract(story, key, model):
-    import requests
-    instructions = (ROOT / "SKILL.md").read_text()
-    evidence = {"feed": story.summary}
-    response = requests.post("https://api.openai.com/v1/responses", headers={"Authorization": "Bearer " + key}, json={"model": model, "store": False, "instructions": instructions, "input": json.dumps({"title": story.title, "evidence": evidence}), "max_output_tokens": 700}, timeout=45)
-    response.raise_for_status()
-    output = "".join(c.get("text", "") for o in response.json().get("output", []) for c in o.get("content", []) if c.get("type") == "output_text")
-    claims = json.loads(output).get("claims", [])
-    return validate_claims(claims, evidence)
-
 def select_stories(stories, limit=10, per_source=3):
     """Round-robin ranked publishers so a release burst cannot crowd others out."""
     pools = {}
@@ -66,7 +56,7 @@ def select_stories(stories, limit=10, per_source=3):
     return selected
 
 
-def build(period="daily", fixtures=False, key=None, model=None, *, window_start=None, window_end=None):
+def build(period="daily", fixtures=False, *, window_start=None, window_end=None):
     if period not in ("daily", "weekly"):
         raise ValueError("Choose daily or weekly")
     if (window_start is None) != (window_end is None):
@@ -111,14 +101,11 @@ def build(period="daily", fixtures=False, key=None, model=None, *, window_start=
         words = s.summary.split()
         excerpt = " ".join(words[:60])
         claims = validate_claims([{"text": excerpt, "quote": excerpt, "evidence_id": "feed"}], {"feed": s.summary}) if excerpt else []
-        if key:
-            try: claims = extract(s, key, model or os.getenv("OPENAI_MODEL", "gpt-4.1-mini"))
-            except Exception: errors.append({"source": s.source, "error": "Optional model unavailable; using source excerpt"})
         item = s.to_dict()
         for field in ("confidence", "score", "score_parts", "status"): item.pop(field, None)
         item.update(summary=" ".join(c["text"] for c in claims), claims=claims, kev_available=not any(e["source"]=="CISA KEV" for e in errors))
         item['details'] = {k: v for k, v in detail.items() if k != 'source_text'}
-        if detail.get('summary') and not key:
+        if detail.get('summary'):
             item['summary'] = detail['summary']
             item['claims'] = [{'text': detail['summary'], 'quote': detail['summary'],
                                'evidence_id': detail['status'] if detail['status'] in ('article', 'csaf', 'cvrf') else 'feed',

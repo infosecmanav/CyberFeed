@@ -17,12 +17,16 @@ def deliver(directory, format, webhook_url):
     data = json.loads((directory / 'briefing.json').read_text(encoding='utf-8'))
     if data.get('demo'):
         raise ValueError('Fictional fixture reports cannot be posted by this command')
+    if data.get('ai',{}).get('status') != 'validated' or not data.get('editorial'):
+        raise ValueError('Only validated AI reports can be delivered. Generate the report with AI enabled first.')
+    from .editorial import validate
+    validate(data['editorial']['evidence'],data['editorial']['report'])
     extension = 'pdf' if format == 'pdf' else 'txt'
     report = directory / f'briefing.{extension}'
-    content = f"Signal — {data['period']} cyber briefing: {len(data['stories'])} updates."
+    content = f"Cyber Feed — {data['period']} cyber briefing: {len(data['stories'])} updates."
     if data['errors']:
         content += f" {len(data['errors'])} coverage warnings; see the report."
-    filename = f"signal-{data['period']}-{data['generated'][:10]}.{extension}"
+    filename = f"cyber-feed-{data['period']}-{data['generated'][:10]}.{extension}"
     # Never log request exceptions: their URLs contain webhook credentials.
     try:
         with report.open('rb') as stream:

@@ -154,7 +154,7 @@ def test_cli_exports_all_formats_and_strict_failure_has_nonzero_status(tmp_path,
     from cyberbrief import cli
     data = build(fixtures=True)
     monkeypatch.setattr(cli, 'build', lambda *a: data)
-    monkeypatch.setattr('sys.argv', ['cli', 'build', '--format', 'all', '--strict', '--out', str(tmp_path)])
+    monkeypatch.setattr('sys.argv', ['cli', 'build', '--source-only', '--format', 'all', '--strict', '--out', str(tmp_path)])
     cli.main()
     assert (tmp_path / 'briefing.pdf').read_bytes().startswith(b'%PDF-')
     assert json.loads((tmp_path / 'briefing.json').read_text())['demo']

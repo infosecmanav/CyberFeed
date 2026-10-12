@@ -63,6 +63,8 @@ def test_empty_reports_explain_coverage_failure():
 def test_bot_delivery_uses_preference_or_override(monkeypatch, saved, override, expected):
     from cyberbrief import discord_bot as module
     data = build(fixtures=True)
+    monkeypatch.setattr(module.AIConfig, 'from_env', lambda: object())
+    monkeypatch.setattr(module, 'generate', lambda report, config: report)
     monkeypatch.setattr(module, 'get_format', lambda user: saved)
     monkeypatch.setattr(module, 'build', lambda *args: data)
     monkeypatch.setattr(module, 'build_lock', asyncio.Lock())
@@ -82,6 +84,7 @@ def test_bot_delivery_uses_preference_or_override(monkeypatch, saved, override, 
 
 def test_bot_reports_failure_without_exposing_exception(monkeypatch):
     from cyberbrief import discord_bot as module
+    monkeypatch.setattr(module.AIConfig, 'from_env', lambda: object())
     monkeypatch.setattr(module, 'get_format', lambda user: 'text')
     monkeypatch.setattr(module, 'build_lock', asyncio.Lock())
     def fail(*args):

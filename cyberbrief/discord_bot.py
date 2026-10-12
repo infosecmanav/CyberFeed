@@ -6,6 +6,7 @@ from typing import Literal, Optional
 import discord
 from discord.ext import commands
 from .engine import build
+from .ai import AIConfig, AIError, generate
 from .preferences import get_format, set_format
 from .reports import text_messages, pdf_report
 
@@ -41,10 +42,12 @@ async def briefing(interaction: discord.Interaction, period: Literal['daily', 'w
     async with build_lock:
         try:
             selected = format or await asyncio.to_thread(get_format, interaction.user.id)
-            data = await asyncio.to_thread(build, period, False, os.getenv('OPENAI_API_KEY'), os.getenv('OPENAI_MODEL'))
+            config = AIConfig.from_env()
+            data = await asyncio.to_thread(build, period, False)
+            data = await asyncio.to_thread(generate, data, config)
             if selected == 'pdf':
                 report = await asyncio.to_thread(pdf_report, data)
-                name = f"signal-{period}-{data['generated'][:10]}.pdf"
+                name = f"cyber-feed-{period}-{data['generated'][:10]}.pdf"
                 await interaction.followup.send('Your cyber briefing is attached.', file=discord.File(BytesIO(report), filename=name), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
             else:
                 messages = text_messages(data)
@@ -52,10 +55,12 @@ async def briefing(interaction: discord.Interaction, period: Literal['daily', 'w
                 # overflow as text instead of failing halfway through a report.
                 if len(messages) > 5:
                     payload = '\n\n'.join(messages).encode('utf-8')
-                    await interaction.followup.send('Your full text briefing is attached.', file=discord.File(BytesIO(payload), filename=f'signal-{period}.txt'), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+                    await interaction.followup.send('Your full text briefing is attached.', file=discord.File(BytesIO(payload), filename=f'cyber-feed-{period}.txt'), ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
                 else:
                     for message in messages:
                         await interaction.followup.send(message, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        except AIError as exc:
+            await interaction.followup.send(str(exc),ephemeral=True,allowed_mentions=discord.AllowedMentions.none())
         except Exception:
             logger.error('Briefing generation or delivery failed')
             await interaction.followup.send('Briefing unavailable; please try again later.', ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
@@ -65,4 +70,8 @@ if __name__ == '__main__':
     token = os.getenv('DISCORD_BOT_TOKEN')
     if not token:
         raise SystemExit('Set DISCORD_BOT_TOKEN securely before starting the bot.')
+    try:
+        AIConfig.from_env()
+    except AIError as exc:
+        raise SystemExit(str(exc)) from None
     bot.run(token)

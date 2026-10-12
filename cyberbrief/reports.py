@@ -7,7 +7,10 @@ from xml.sax.saxutils import escape, quoteattr
 
 
 def sections(data):
-    yield f"Signal — {data['period'].title()} cyber briefing"
+    if data.get('editorial'):
+        yield from editorial_sections(data)
+        return
+    yield f"Cyber Feed — {data['period'].title()} cyber briefing"
     yield f"Generated: {data['generated']}"
     if data.get('demo'):
         yield "DEMO — fictional examples, not real incidents."
@@ -70,6 +73,9 @@ def text_messages(data, limit=1900):
 
 def pdf_report(data):
     """Build a paginated PDF entirely in memory with embedded fonts."""
+    if data.get('editorial'):
+        from .editorial import render
+        return render(data['editorial']['evidence'], data['editorial']['report'], preview=False)
     import reportlab
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import inch
@@ -88,7 +94,7 @@ def pdf_report(data):
         styles[name].wordWrap = 'CJK'
     styles['BodyText'].leading = 15
     buffer = BytesIO()
-    document = SimpleDocTemplate(buffer, title=f"Signal {data['period']} briefing", leftMargin=.65*inch, rightMargin=.65*inch)
+    document = SimpleDocTemplate(buffer, title=f"Cyber Feed {data['period']} briefing", leftMargin=.65*inch, rightMargin=.65*inch)
     styles['Heading1'].textColor = colors.HexColor('#164b63')
     styles['Heading1'].spaceBefore = 14
     styles['Heading1'].keepWithNext = True
@@ -108,7 +114,41 @@ def pdf_report(data):
     def footer(canvas, doc):
         canvas.setFont('Signal', 8)
         canvas.setFillColor(colors.grey)
-        canvas.drawString(.65*inch, .35*inch, 'Signal | Source-attributed cyber briefing')
         canvas.drawRightString(doc.pagesize[0]-.65*inch, .35*inch, f'Page {doc.page}')
     document.build(flow, onFirstPage=footer, onLaterPages=footer)
     return buffer.getvalue()
+
+
+def editorial_sections(data):
+    from .editorial import validate
+    payload, output = data['editorial']['evidence'], data['editorial']['report']
+    validate(payload, output)
+    yield 'Cyber Feed'
+    yield f"{data['period'].title()} AI report · {data['generated']}"
+    if data.get('window_start'):
+        yield f"Coverage: {data['window_start']} to {data['window_end']} (end exclusive)"
+    if not output['stories']:
+        yield 'No updates in this coverage window.'
+    labels = {'context':'Context and impact', 'affected':'Affected products and versions', 'action':'Patches and recommended action', 'exploitation':'Exploitation status'}
+    for index,(source,story) in enumerate(zip(payload['stories'],output['stories']),1):
+        yield f"{index}. {story['title']}"
+        yield source['source']+' · '+source['published'][:10]
+        refs = source.get('references') or [{'source':source['source'],'url':source['url']}]
+        def citation(item):
+            number = next((n for n,r in enumerate(refs,1) if 'KEV' in r['source']),1) if item['evidence_id'].endswith('.kev') else 1
+            return f' [{index}.{number}]'
+        yield 'a. AI summary'
+        for bullet in story['bullets']: yield '• '+bullet['text']+citation(bullet)
+        yield 'b. Detailed AI-powered report'
+        for item in story['details']: yield labels[item['section']]+': '+item['text']+citation(item)
+        if story.get('diagram'):
+            yield 'Optional diagram relationships'
+            nodes = {node['id']:node['text'] for node in story['diagram']['nodes']}
+            for edge in story['diagram']['edges']:
+                yield nodes[edge['from']]+' → '+nodes[edge['to']]+citation(edge)
+        if story.get('missing'): yield 'Not supplied: '+', '.join(story['missing'])
+        yield 'c. References'
+        for n,ref in enumerate(refs,1):yield f"[{index}.{n}] "+ref['source']+': '+ref['url']
+    if payload['errors']:
+        yield 'Coverage warnings'
+        for error in payload['errors']:yield error['source']+': '+error['error']

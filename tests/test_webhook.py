@@ -8,7 +8,11 @@ URL = 'https://discord.com/api/webhooks/123/test-secret'
 
 
 def report(tmp_path):
-    (tmp_path/'briefing.json').write_text(json.dumps({'demo': False, 'period':'daily', 'generated':'2026-10-12T00:00:00Z', 'stories':[{}], 'errors':[]}))
+    from pathlib import Path
+    root=Path(__file__).resolve().parent.parent/'docs'/'editorial-preview'
+    payload=json.loads((root/'evidence.json').read_text());output=json.loads((root/'summary.json').read_text())
+    data={'demo':False,'period':'daily','generated':'2026-10-12T00:00:00Z','stories':[{}],'errors':[], 'ai':{'status':'validated'}, 'editorial':{'evidence':payload,'report':output}}
+    (tmp_path/'briefing.json').write_text(json.dumps(data))
     (tmp_path/'briefing.pdf').write_bytes(b'%PDF-test')
     (tmp_path/'briefing.txt').write_text('Test report')
     return tmp_path
@@ -98,3 +102,10 @@ def test_weekly_window_includes_friday_and_excludes_next_friday(monkeypatch):
     monkeypatch.setattr(engine,'enrich',lambda s,*a:{'status':'article','url':s.url,'fields':{},'summary':s.summary})
     data=engine.build('weekly',window_start=start,window_end=end)
     assert {s['title'] for s in data['stories']}=={'first','last'}
+
+
+def test_non_ai_or_invalid_editorial_report_is_not_delivered(tmp_path,monkeypatch):
+    directory=report(tmp_path);post=Mock();monkeypatch.setattr('cyberbrief.webhook.requests.post',post)
+    data=json.loads((directory/'briefing.json').read_text());data.pop('ai');(directory/'briefing.json').write_text(json.dumps(data))
+    with pytest.raises(ValueError,match='validated AI'):deliver(directory,'pdf',URL)
+    post.assert_not_called()

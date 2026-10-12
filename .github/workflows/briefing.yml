@@ -59,12 +59,20 @@ jobs:
         run: |
           python -m pip install -r requirements-dev.txt
           python -m pytest -q
-      - name: Check Discord delivery configuration
+      - name: Check AI and Discord configuration
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_BASE_URL: ${{ vars.AI_BASE_URL }}
+          AI_MAX_OUTPUT_TOKENS: ${{ vars.AI_MAX_OUTPUT_TOKENS }}
+          AI_JSON_MODE: ${{ vars.AI_JSON_MODE }}
         run: |
           python - <<'PY'
           import os
+          from cyberbrief.ai import AIConfig
+          AIConfig.from_env()
           if not os.getenv('DISCORD_WEBHOOK_URL'):
               raise SystemExit('Add DISCORD_WEBHOOK_URL in repository Actions secrets before running.')
           PY
@@ -72,7 +80,13 @@ jobs:
         # Preserve explicit source warnings in the report if coverage is partial.
         env:
           REPORT_PERIOD: ${{ needs.schedule.outputs.period }}
-        run: python -m cyberbrief.cli build --period "$REPORT_PERIOD" --scheduled-window --format all --out site
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_PROVIDER: ${{ vars.AI_PROVIDER }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_BASE_URL: ${{ vars.AI_BASE_URL }}
+          AI_MAX_OUTPUT_TOKENS: ${{ vars.AI_MAX_OUTPUT_TOKENS }}
+          AI_JSON_MODE: ${{ vars.AI_JSON_MODE }}
+        run: python -m cyberbrief.cli build --ai --period "$REPORT_PERIOD" --scheduled-window --format all --out site
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ needs.schedule.outputs.period }}-briefing-${{ github.run_id }}

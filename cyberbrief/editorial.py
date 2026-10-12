@@ -41,6 +41,10 @@ def pack(report, detail_level='full'):
     return {'period': report['period'], 'generated': report['generated'], 'demo': report.get('demo',False), 'window_start':report.get('window_start'), 'window_end':report.get('window_end'), 'errors':report['errors'], 'stories': stories}
 
 
+def fact_tokens(text):
+    return {match.upper() for match in re.findall(r'\bCVE-\d{4}-\d{4,7}\b|\b\d+(?:\.[0-9A-Za-z]+)+\b', text, re.I)}
+
+
 def validate(payload, summary):
     if not isinstance(summary, dict) or not isinstance(summary.get('stories'), list):
         raise ValueError('Expected a stories array')
@@ -62,6 +66,12 @@ def validate(payload, summary):
                 raise ValueError('Bullets require text and exact evidence quotations')
             if bullet.get('evidence_id') not in evidence or quote not in evidence[bullet['evidence_id']]:
                 raise ValueError('Evidence ID or quotation does not match the input')
+        allowed = fact_tokens(source['title']+' '+ ' '.join(e['text'] for e in source['evidence']))
+        if not fact_tokens(title).issubset(allowed):
+            raise ValueError('Title contains unsupported CVEs or versions')
+        for bullet in bullets:
+            if not fact_tokens(bullet['text']).issubset(fact_tokens(bullet['quote'])):
+                raise ValueError('Bullet contains CVEs or versions absent from its quotation')
         if len((' '.join([title]+[b['text'] for b in bullets])).split())>120:
             raise ValueError('Story exceeds 120-word editorial limit')
         missing = story.get('missing',[])
@@ -73,6 +83,8 @@ def validate(payload, summary):
             raise ValueError('Editorial entries require text and exact quotations')
         if item.get('evidence_id') not in evidence or quote not in evidence[item['evidence_id']]:
             raise ValueError('Editorial citation or quotation does not match input')
+        if not fact_tokens(text).issubset(fact_tokens(quote)):
+            raise ValueError('Editorial text contains CVEs or versions absent from its quotation')
     for source, story in zip(payload['stories'], summary['stories']):
         details = story.get('details')
         if not isinstance(details, list) or not 1 <= len(details) <= 20:
@@ -131,7 +143,7 @@ def diagram_drawing(diagram, width, accent, ink, background):
     return drawing
 
 
-def render(payload, summary, theme='dark'):
+def render(payload, summary, theme='dark', *, preview=True):
     validate(payload,summary)
     if theme not in ('dark','light'): raise ValueError('Choose dark or light')
     from reportlab.lib import colors
@@ -148,7 +160,12 @@ def render(payload, summary, theme='dark'):
     body=style('body');heading=style('heading',13,ink,17);meta=style('meta',8,muted,12);title=style('title',28,ink,34)
     heading.keepWithNext = True
     out=BytesIO();doc=SimpleDocTemplate(out,leftMargin=36,rightMargin=36,topMargin=42,bottomMargin=42)
-    flow=[Paragraph('Cyber Feed',title),Paragraph('DESIGN PREVIEW · Agent-edited sample; automated AI delivery is not connected.',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
+    flow=[Paragraph('Cyber Feed',title),Paragraph('DESIGN PREVIEW · Historical sample' if preview else 'AI-edited report · Source-linked evidence',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
+    if not summary['stories']:flow.append(Paragraph('No updates in this coverage window.',body))
+    if payload.get('window_start') and payload.get('window_end'):
+        zone = ZoneInfo('America/Toronto')
+        dates = [datetime.fromisoformat(payload[key]).astimezone(zone).strftime('%b %d, %Y %H:%M %Z') for key in ('window_start','window_end')]
+        flow.append(Paragraph(escape('Coverage: '+dates[0]+' to '+dates[1]+' (end exclusive)'),meta))
     if payload.get('demo'):flow.append(Paragraph('FICTIONAL DEMO — not real incidents.',body))
     labels={'context':'WHAT HAPPENED / IMPACT','affected':'AFFECTED PRODUCTS & VERSIONS','action':'PATCHES & RECOMMENDED ACTION','exploitation':'EXPLOITATION STATUS'}
     for index,(source,story) in enumerate(zip(payload['stories'],summary['stories']),1):
