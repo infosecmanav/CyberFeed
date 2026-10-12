@@ -1,0 +1,122 @@
+{
+  "period": "weekly",
+  "generated": "2026-10-12T00:31:03.973590+00:00",
+  "demo": false,
+  "window_start": "2026-10-05T00:31:03.973590+00:00",
+  "window_end": "2026-10-12T00:31:03.973590+00:00",
+  "errors": [],
+  "stories": [
+    {
+      "id": "s1",
+      "title": "AL26-024 - Critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway \u2013 CVE-2026-88771 and CVE-2026-88772 \u2013 Update 2",
+      "source": "Canadian Centre for Cyber Security",
+      "published": "2026-10-09T18:16:08+00:00",
+      "url": "https://www.cyber.gc.ca/en/alerts-advisories/al26-024-critical-vulnerabilities-affecting-citrix-netscaler-adc-netscaler-gateway-cve-2026-88771-cve-2026-88772",
+      "evidence": [
+        {
+          "id": "s1.summary",
+          "text": "The vulnerability may allow a remote, unauthenticated attacker to execute arbitrary code on a vulnerable NetScaler appliance. Successful exploitation could result in complete compromise of the appliance, unauthorized access to applications and services, credential theft, lateral movement, and further compromise of internal systems. Successful exploitation may allow arbitrary code execution, memory corruption, denial of service conditions, or other unintended behaviour",
+          "truncated": true
+        },
+        {
+          "id": "s1.affected",
+          "text": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances. In response to the vendor security bulletin Footnote 1 and blog Footnote 2 released on September 27, 2026, the Cyber Centre is issuing this alert to raise awareness of the vulnerabilities and associated reports",
+          "truncated": true
+        },
+        {
+          "id": "s1.remediation",
+          "text": "Organizations should review the Citrix security bulletin Footnote 1 to determine whether their deployments are affected, prioritize remediation of Internet-facing systems, and investigate for signs of compromise, particularly where evidence of suspicious activity predates the release of vendor fixes The Cyber Centre also recommends that organizations: contact Citrix or their authorized support provider as soon as possible to obtain the latest security guidance and patch availability information Preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances, where feasible. Preserve appliance",
+          "truncated": true
+        },
+        {
+          "id": "s1.exploitation",
+          "text": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances. In response to the vendor security bulletin Footnote 1 and blog Footnote 2 released on September 27, 2026, the",
+          "truncated": true
+        },
+        {
+          "id": "s1.kev",
+          "text": "CISA KEV matched CVEs: CVE-2026-88771, CVE-2026-88772",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "Lantronix EDS3000PS and EDS5000 (Update B)",
+      "source": "CISA",
+      "published": "2026-10-08T06:00:00+00:00",
+      "url": "https://raw.githubusercontent.com/cisagov/CSAF/develop/csaf_files/OT/white/2026/icsa-26-069-02.json",
+      "evidence": [
+        {
+          "id": "s2.summary",
+          "text": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges.",
+          "truncated": false
+        },
+        {
+          "id": "s2.affected",
+          "text": "Lantronix EDS5000 series: <=2.1.0.0R3 | Lantronix G520 series: <2.6.0.4R6 | Lantronix X300 series: <2.6.0.4R6 | Lantronix E210 series: <3.21.0.0R1 | Lantronix E220 series: <3.21.0.0R1 | Lantronix EDS3000PS series: <=3.1.0.0R2",
+          "truncated": false
+        },
+        {
+          "id": "s2.remediation",
+          "text": "EDS5000 series: Upgrade to version 2.2.0.0R1 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/2538438657/Latest+Firmware+for+the+EDS5000+series+EDS5008+EDS5016+EDS5032. (CVE-2025-67034, CVE-2025-67035, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | G520 series: Upgrade to version 2.6.0.4R6 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/1889828865/Latest+firmware+for+the+G520+Series+G526+G526RP+G527+G528. (CVE-2025-67034, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | X300 series: Upgrade to version 2.6.0.4R6 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/2135261185/Latest+firmware+for+the+X300+Series+X300+X303+X304. (CVE-2025-67034, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | E210 series: Upgrade to version 3.21.0.0R1 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/1914404865/Latest+firmware+ePack+for+the+E210+Series+E213+E214+E215+E218+Cellular+Routers. (CVE-2025-67038) | E220 series: Upgrade to version 3.21.0.0R1 or",
+          "truncated": true
+        },
+        {
+          "id": "s2.workarounds",
+          "text": "Lantronix has released the following updates addressing these vulnerabilities. For more information, see the Lantronix Vulnerability Library (https://www.lantronix.com/technical-support/security-updates/vulnerability-disclosure-policy/vulnerability-library/?_gl=16c8bez_upMQ.._gaMzQwNjk5ODI5LjE3ODI5MTM3NTk._ga_M2G6RLT5L3*czE3ODI5MTM3NTgkbzEkZzAkdDE3ODI5MTM3NTgkajYwJGwwJGgw). | For more information or technical assistance, contact Lantronix support (Support@lantronix.com).",
+          "truncated": false
+        },
+        {
+          "id": "s2.exploitation",
+          "text": "An issue was discovered in Lantronix EDS3000PS 3.1.0.0R2. The host parameter of the TFTP client in the Filesystem Browser page is not properly sanitized. This can be exploited to escape from the original command and execute an arbitrary one with",
+          "truncated": true
+        },
+        {
+          "id": "s2.kev",
+          "text": "CISA KEV matched CVEs: CVE-2025-67038",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "id": "s3",
+      "title": "Improper limitation of a pathname to a restricted directory",
+      "source": "Fortinet PSIRT",
+      "published": "2026-10-01T07:00:00+00:00",
+      "url": "https://www.fortiguard.com/psirt/FG-IR-26-175",
+      "evidence": [
+        {
+          "id": "s3.summary",
+          "text": "An Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') [CWE-22] and Improper Neutralization of NULL Byte or NULL Character [CWE-158] vulnerability may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests. This has been reported to be exploited in the wild, customers are urged to apply the workaround",
+          "truncated": true
+        },
+        {
+          "id": "s3.affected",
+          "text": "Version Affected Solution FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above FortiMail 7.6 7.6.0 through 7.6.6 Upgrade to 7.6.7 or above FortiMail 7.4 7.4.0 through 7.4.8 Upgrade to 7.4.9 or above FortiMail 7.2 7.2.0 through 7.2.9 Upgrade to branch 7.4 or above",
+          "truncated": false
+        },
+        {
+          "id": "s3.remediation",
+          "text": "Version Affected Solution FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above FortiMail 7.6 7.6.0 through 7.6.6 Upgrade to 7.6.7 or above FortiMail 7.4 7.4.0 through 7.4.8 Upgrade to 7.4.9 or above FortiMail 7.2 7.2.0 through 7.2.9 Upgrade to branch 7.4 or above",
+          "truncated": false
+        },
+        {
+          "id": "s3.workarounds",
+          "text": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' ) or with the following CLI command: config system encryption ibe set status disable end Alternatively: - Disable access to the FortiMail webmail interface from the internet or limit",
+          "truncated": true
+        },
+        {
+          "id": "s3.exploitation",
+          "text": "This has been reported to be exploited in the wild, customers are urged to apply the workaround below.",
+          "truncated": false
+        },
+        {
+          "id": "s3.kev",
+          "text": "CISA KEV matched CVEs: CVE-2026-104286",
+          "truncated": false
+        }
+      ]
+    }
+  ]
+}

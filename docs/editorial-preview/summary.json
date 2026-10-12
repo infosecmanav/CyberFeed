@@ -1,0 +1,99 @@
+{
+  "stories": [
+    {
+      "id": "s1",
+      "title": "Citrix NetScaler: check exposure and investigate compromise",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "The Canadian Cyber Centre warns of critical vulnerabilities affecting NetScaler ADC and NetScaler Gateway.",
+          "evidence_id": "s1.affected",
+          "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances."
+        },
+        {
+          "kind": "why",
+          "text": "A remote attacker could execute arbitrary code on a vulnerable appliance without authenticating.",
+          "evidence_id": "s1.summary",
+          "quote": "The vulnerability may allow a remote, unauthenticated attacker to execute arbitrary code on a vulnerable NetScaler appliance."
+        },
+        {
+          "kind": "action",
+          "text": "Preserve forensic evidence before rebooting, patching, or rebuilding affected appliances, where feasible.",
+          "evidence_id": "s1.remediation",
+          "quote": "Preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances, where feasible."
+        },
+        {
+          "kind": "exploitation",
+          "text": "CISA KEV lists CVE-2026-88771 and CVE-2026-88772. That signal applies to those CVEs, not every related issue.",
+          "evidence_id": "s1.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2026-88771, CVE-2026-88772"
+        }
+      ],
+      "missing": [
+        "versions"
+      ]
+    },
+    {
+      "id": "s2",
+      "title": "Lantronix: check device versions and apply the matching fix",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "CISA warns that successful exploitation could bypass authentication and run code with root-level privileges.",
+          "evidence_id": "s2.summary",
+          "quote": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges."
+        },
+        {
+          "kind": "affected",
+          "text": "One affected product is EDS5000 through 2.1.0.0R3. Check the complete product table before acting.",
+          "evidence_id": "s2.affected",
+          "quote": "Lantronix EDS5000 series: <=2.1.0.0R3"
+        },
+        {
+          "kind": "action",
+          "text": "For EDS5000, upgrade to 2.2.0.0R1 or later. This fix is specific to that family.",
+          "evidence_id": "s2.remediation",
+          "quote": "EDS5000 series: Upgrade to version 2.2.0.0R1 or later."
+        },
+        {
+          "kind": "exploitation",
+          "text": "CISA KEV lists CVE-2025-67038. Do not interpret that as exploitation of every vulnerability in this advisory.",
+          "evidence_id": "s2.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2025-67038"
+        }
+      ],
+      "missing": []
+    },
+    {
+      "id": "s3",
+      "title": "FortiMail: match your branch to its fixed release",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "An unauthenticated attacker could write arbitrary files through crafted HTTP or HTTPS requests.",
+          "evidence_id": "s3.summary",
+          "quote": "may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests."
+        },
+        {
+          "kind": "exploitation",
+          "text": "Fortinet reports exploitation in the wild.",
+          "evidence_id": "s3.exploitation",
+          "quote": "This has been reported to be exploited in the wild, customers are urged to apply the workaround below."
+        },
+        {
+          "kind": "action",
+          "text": "Example: FortiMail 8.0.0\u20138.0.1 should move to 8.0.2 or above. Check the source table for other branches.",
+          "evidence_id": "s3.remediation",
+          "quote": "FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above"
+        },
+        {
+          "kind": "action",
+          "text": "The listed workaround is to disable IBE feature support in the GUI. Consult the vendor guidance before changing configuration.",
+          "evidence_id": "s3.workarounds",
+          "quote": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' )"
+        }
+      ],
+      "missing": []
+    }
+  ]
+}
