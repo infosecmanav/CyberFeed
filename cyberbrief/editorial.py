@@ -11,7 +11,9 @@ from xml.sax.saxutils import escape, quoteattr
 BUDGETS = {'summary': 60, 'affected': 55, 'remediation': 85, 'workarounds': 45, 'exploitation': 40}
 
 
-def pack(report):
+def pack(report, detail_level='full'):
+    if detail_level not in ('full','compact'):
+        raise ValueError('Choose full or compact evidence')
     stories = []
     for index, source in enumerate(report['stories'], 1):
         ident = f's{index}'
@@ -20,13 +22,13 @@ def pack(report):
         for field, budget in BUDGETS.items():
             text = source.get('summary', '') if field == 'summary' else fields.get(field, {}).get('text', '')
             if text:
-                if field == 'summary':
+                if field == 'summary' and detail_level == 'compact':
                     sentences = re.split(r'(?<=[.!?])\s+', text)
                     focused = [sentence for sentence in sentences if sentence.endswith(('.', '!', '?')) and re.search(r'may allow|could allow|successful exploitation|actively exploited|exploited in the wild', sentence, re.I)]
                     if focused:
                         text = ' '.join(focused)
                 words = text.split()
-                evidence.append({'id': ident+'.'+field, 'text': ' '.join(words[:budget]), 'truncated': len(words)>budget or fields.get(field, {}).get('truncated', False)})
+                evidence.append({'id': ident+'.'+field, 'text': text if detail_level == 'full' else ' '.join(words[:budget]), 'truncated': (detail_level == 'compact' and len(words)>budget) or fields.get(field, {}).get('truncated', False)})
         if source.get('known_exploited_cves'):
             evidence.append({'id': ident+'.kev', 'text': 'CISA KEV matched CVEs: '+', '.join(source['known_exploited_cves']), 'truncated': False})
         references = []
@@ -73,14 +75,12 @@ def validate(payload, summary):
             raise ValueError('Editorial citation or quotation does not match input')
     for source, story in zip(payload['stories'], summary['stories']):
         details = story.get('details')
-        if not isinstance(details, list) or not 1 <= len(details) <= 6:
-            raise ValueError('Detailed report requires 1–6 supported entries per story')
+        if not isinstance(details, list) or not 1 <= len(details) <= 20:
+            raise ValueError('Detailed report requires 1–20 supported entries per story')
         for item in details:
             if item.get('section') not in ('context', 'affected', 'action', 'exploitation'):
                 raise ValueError('Invalid detailed report section')
             cited(item, {e['id']: e['text'] for e in source['evidence']})
-        if len(' '.join(item['text'] for item in details).split()) > 220:
-            raise ValueError('Detailed report exceeds 220 words per story')
         diagram = story.get('diagram')
         if diagram is not None:
             if not isinstance(diagram, dict) or not isinstance(diagram.get('nodes'), list) or not 2 <= len(diagram['nodes']) <= 6:
@@ -194,9 +194,9 @@ def render(payload, summary, theme='dark'):
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('command',choices=['pack','render']);p.add_argument('--input',required=True);p.add_argument('--output',required=True);p.add_argument('--summary');p.add_argument('--theme',choices=['dark','light'],default='dark');a=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('command',choices=['pack','render']);p.add_argument('--input',required=True);p.add_argument('--output',required=True);p.add_argument('--summary');p.add_argument('--detail-level',choices=['full','compact'],default='full');p.add_argument('--theme',choices=['dark','light'],default='dark');a=p.parse_args()
     data=json.loads(Path(a.input).read_text(encoding='utf-8'));out=Path(a.output)
-    if a.command=='pack':out.write_text(json.dumps(pack(data),ensure_ascii=False,separators=(',',':')),encoding='utf-8')
+    if a.command=='pack':out.write_text(json.dumps(pack(data,a.detail_level),ensure_ascii=False,separators=(',',':')),encoding='utf-8')
     else:
         if not a.summary:p.error('render requires --summary')
         out.write_bytes(render(data,json.loads(Path(a.summary).read_text(encoding='utf-8')),a.theme))

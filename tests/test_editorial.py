@@ -16,7 +16,7 @@ def sample():
 def test_compact_input_bounded_and_fictional_status_preserved():
     data=build(fixtures=True)
     data['stories'][0]['summary']='source words '*1000
-    p=pack(data)
+    p=pack(data,detail_level='compact')
     assert p['demo'] and len(p['stories'])==len(data['stories'])
     evidence=p['stories'][0]['evidence'][0]
     assert len(evidence['text'].split())<=60 and evidence['truncated']
@@ -40,12 +40,7 @@ def test_preview_pdf_preserves_summary_links_and_missing_fields(theme):
     assert 'DESIGN PREVIEW' in text and 'Not supplied: versions' in text
     assert 'FortiMail' in text and 'Lantronix' in text and 'Citrix' in text
     assert any(page.get('/Annots') for page in reader.pages)
-    assert len(reader.pages)==10
-    for page in reader.pages:
-        page_text=page.extract_text()
-        assert page_text.count('a. AI summary')==1
-        assert page_text.count('b. Detailed AI-powered report')==1
-        assert page_text.count('c. References')==1
+    assert len(reader.pages)>=10
     assert len(p['stories']) == 10
     assert text.count('a. AI summary') == 10
     assert text.count('b. Detailed AI-powered report') == 10
@@ -65,8 +60,11 @@ def test_detailed_citations_and_length_are_checked():
     p,s=sample()
     bad=copy.deepcopy(s);bad['stories'][0]['details'][0]['quote']='Invented detail evidence'
     with pytest.raises(ValueError,match='quotation'):validate(p,bad)
-    bad=copy.deepcopy(s);bad['stories'][0]['details'][0]['text']='word '*230
-    with pytest.raises(ValueError,match='220 words'):validate(p,bad)
+    expanded=copy.deepcopy(s)
+    evidence=next(e for e in p['stories'][0]['evidence'] if e['id'].endswith('.remediation'))
+    assert len(evidence['text'].split())>220
+    expanded['stories'][0]['details'][0].update(text=evidence['text'],quote=evidence['text'],evidence_id=evidence['id'])
+    validate(p,expanded)  # Supported detail is not rejected solely for length.
 
 
 def test_diagram_is_optional_and_requires_supported_nodes_and_edges():
@@ -82,3 +80,15 @@ def test_diagram_is_optional_and_requires_supported_nodes_and_edges():
     with pytest.raises(ValueError,match='invalid nodes'):validate(p,bad)
     bad=copy.deepcopy(s);bad['stories'][0]['diagram']['edges'][0]['quote']='Invented transition'
     with pytest.raises(ValueError,match='matching evidence'):validate(p,bad)
+
+
+def test_full_evidence_preserves_details_that_compact_mode_omits():
+    report=build(fixtures=True)
+    text='Affected product version 1. ' * 90 + 'Fixed build 2.9.777 applies only to Product Z.'
+    report['stories'][0]['details']={'fields':{'remediation':{'text':text,'truncated':True}}}
+    full=pack(report);compact=pack(report,detail_level='compact')
+    a=next(e for e in full['stories'][0]['evidence'] if e['id'].endswith('.remediation'))
+    b=next(e for e in compact['stories'][0]['evidence'] if e['id'].endswith('.remediation'))
+    assert a['text']==text and '2.9.777' in a['text']
+    assert '2.9.777' not in b['text']
+    assert a['truncated']  # Upstream truncation remains visible.

@@ -35,25 +35,25 @@
       "details": [
         {
           "section": "context",
-          "text": "The Canadian Cyber Centre warns of critical vulnerabilities affecting NetScaler ADC and NetScaler Gateway.",
-          "evidence_id": "s1.affected",
-          "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances."
+          "text": "Tracked as CVE-2026-88771 , this vulnerability is an Improper Input Validation vulnerability (CWE-20) . The vulnerability may allow a remote, unauthenticated attacker to execute arbitrary code on a vulnerable NetScaler appliance. Successful exploitation could result in complete compromise of the appliance, unauthorized access to applications and services, credential theft, lateral movement, and further compromise of internal systems. Tracked as CVE-2026-88772 , this vulnerability is a Buffer Overflow vulnerability (CWE-119) . Successful exploitation may allow arbitrary code execution, memory corruption, denial of service conditions, or other unintended behaviour on affected appliances. [The supplied excerpt ends before the remaining explanation.]",
+          "evidence_id": "s1.summary",
+          "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances. In response to the vendor security bulletin Footnote 1 and blog Footnote 2 released on September 27, 2026, the Cyber Centre is issuing this alert to raise awareness of the vulnerabilities and associated reports of active exploitation. Tracked as CVE-2026-88771 Footnote 3 , this vulnerability is an Improper Input Validation vulnerability (CWE-20) Footnote 4 . The vulnerability may allow a remote, unauthenticated attacker to execute arbitrary code on a vulnerable NetScaler appliance. Successful exploitation could result in complete compromise of the appliance, unauthorized access to applications and services, credential theft, lateral movement, and further compromise of internal systems. Tracked as CVE-2026-88772 Footnote 5 , this vulnerability is a Buffer Overflow vulnerability (CWE-119) Footnote 6 . Successful exploitation may allow arbitrary code execution, memory corruption, denial of service conditions, or other unintended behaviour on affected appliances. Reports indicate that these"
         },
         {
-          "section": "context",
-          "text": "The advisory describes a possible route to remote code execution without authentication. An attacker could execute arbitrary code on a vulnerable NetScaler appliance. This is a capability described by the source; it does not establish that every deployment has been compromised.",
-          "evidence_id": "s1.summary",
-          "quote": "The vulnerability may allow a remote, unauthenticated attacker to execute arbitrary code on a vulnerable NetScaler appliance."
+          "section": "affected",
+          "text": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances. In response to the vendor security bulletin and blog released on September 27, 2026, the Cyber Centre is issuing this alert to raise awareness of the vulnerabilities and associated reports of active exploitation.",
+          "evidence_id": "s1.affected",
+          "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances. In response to the vendor security bulletin Footnote 1 and blog Footnote 2 released on September 27, 2026, the Cyber Centre is issuing this alert to raise awareness of the vulnerabilities and associated reports of active exploitation."
         },
         {
           "section": "action",
-          "text": "Where feasible, preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances. The report does not supply exact fixed versions, so consult the original advisory for the applicable release guidance.",
+          "text": "Organizations should review the Citrix security bulletin to determine whether their deployments are affected, prioritize remediation of Internet-facing systems, and investigate for signs of compromise, particularly where evidence of suspicious activity predates the release of vendor fixes The Cyber Centre also recommends that organizations: contact Citrix or their authorized support provider as soon as possible to obtain the latest security guidance and patch availability information Preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances, where feasible. Preserve appliance logs, remote syslog records, and NetScaler Console logs. Collect support bundles and other diagnostic information that may assist future investigations. Review running processes and active network connections for suspicious or unexplained activity. Examine startup scripts, scheduled tasks, web application directories, and crash dump locations for unauthorized modifications or indicators of persistence. Preserve suspicious files and configurations before changing or removing them. Correlate findings with firewall, DNS, authentication, endpoint, and other supporting telemetry sources. Investigate unexpected outbound connections, unusual administrative access, and suspicious activity on connected systems. Review the attached list of indicators of compromise and investigate to find matching patterns. Follow Citrix guidance for suspected compromises, including isolation of affected appliances and assessment of credential exposure . Conduct an organization-specific risk assessment based on the criticality of affected NetScaler deployments, any suspicious findings, and the limited information currently available. Where operationally feasible and justified by the organization's risk assessment, consider temporarily disabling or shutting down Internet-facing NetScaler appliances until vendor guidance and security updates become available; organizations should carefully weigh the cybersecurity risks of continued operation against the operational and business impacts of service disruption before taking this action. Prepare to reset credentials, invalidate active sessions, and replace certificates if compromise is suspected Be prepared to rebuild or replace compromised appliances from trusted [The supplied source section is truncated; remaining details are not inferred.]",
           "evidence_id": "s1.remediation",
-          "quote": "Preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances, where feasible."
+          "quote": "Organizations should review the Citrix security bulletin Footnote 1 to determine whether their deployments are affected, prioritize remediation of Internet-facing systems, and investigate for signs of compromise, particularly where evidence of suspicious activity predates the release of vendor fixes The Cyber Centre also recommends that organizations: contact Citrix or their authorized support provider as soon as possible to obtain the latest security guidance and patch availability information Preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances, where feasible. Preserve appliance logs, remote syslog records, and NetScaler Console logs. Collect support bundles and other diagnostic information that may assist future investigations. Review running processes and active network connections for suspicious or unexplained activity. Examine startup scripts, scheduled tasks, web application directories, and crash dump locations for unauthorized modifications or indicators of persistence. Preserve suspicious files and configurations before changing or removing them. Correlate findings with firewall, DNS, authentication, endpoint, and other supporting telemetry sources. Investigate unexpected outbound connections, unusual administrative access, and suspicious activity on connected systems. Review the attached list of indicators of compromise and investigate to find matching patterns. Follow Citrix guidance for suspected compromises, including isolation of affected appliances and assessment of credential exposure Footnote 7 . Conduct an organization-specific risk assessment based on the criticality of affected NetScaler deployments, any suspicious findings, and the limited information currently available. Where operationally feasible and justified by the organization's risk assessment, consider temporarily disabling or shutting down Internet-facing NetScaler appliances until vendor guidance and security updates become available; organizations should carefully weigh the cybersecurity risks of continued operation against the operational and business impacts of service disruption before taking this action. Prepare to reset credentials, invalidate active sessions, and replace certificates if compromise is suspected Be prepared to rebuild or replace compromised appliances from trusted"
         },
         {
           "section": "exploitation",
-          "text": "CISA KEV lists CVE-2026-88771 and CVE-2026-88772. That signal applies to those CVEs, not every related issue.",
+          "text": "CISA KEV matched CVEs: CVE-2026-88771, CVE-2026-88772.",
           "evidence_id": "s1.kev",
           "quote": "CISA KEV matched CVEs: CVE-2026-88771, CVE-2026-88772"
         }
@@ -92,25 +92,37 @@
       "details": [
         {
           "section": "context",
-          "text": "CISA describes vulnerabilities that could permit authentication bypass and code execution with root-level privileges if successfully exploited. Treat this as the stated technical impact, not proof that a particular device was compromised.",
+          "text": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges.",
           "evidence_id": "s2.summary",
           "quote": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges."
         },
         {
           "section": "affected",
-          "text": "The supplied affected-product list includes EDS5000 releases through 2.1.0.0R3. This boundary is specific to EDS5000; do not apply it to other Lantronix families. The source contains the complete product and version list.",
+          "text": "Lantronix EDS5000 series: <=2.1.0.0R3 | Lantronix G520 series: <2.6.0.4R6 | Lantronix X300 series: <2.6.0.4R6 | Lantronix E210 series: <3.21.0.0R1 | Lantronix E220 series: <3.21.0.0R1 | Lantronix EDS3000PS series: <=3.1.0.0R2",
           "evidence_id": "s2.affected",
-          "quote": "Lantronix EDS5000 series: <=2.1.0.0R3"
+          "quote": "Lantronix EDS5000 series: <=2.1.0.0R3 | Lantronix G520 series: <2.6.0.4R6 | Lantronix X300 series: <2.6.0.4R6 | Lantronix E210 series: <3.21.0.0R1 | Lantronix E220 series: <3.21.0.0R1 | Lantronix EDS3000PS series: <=3.1.0.0R2"
         },
         {
           "section": "action",
-          "text": "For the EDS5000 series, the stated fix is version 2.2.0.0R1 or later. Match the actual device family and release to the source guidance rather than treating that version as a universal Lantronix fix.",
+          "text": "EDS5000 series: Upgrade to version 2.2.0.0R1 or later. The patch can be found here: [vendor reference] (CVE-2025-67034, CVE-2025-67035, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | G520 series: Upgrade to version 2.6.0.4R6 or later. The patch can be found here: [vendor reference] (CVE-2025-67034, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | X300 series: Upgrade to version 2.6.0.4R6 or later. The patch can be found here: [vendor reference] (CVE-2025-67034, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | E210 series: Upgrade to version 3.21.0.0R1 or later. The patch can be found here: [vendor reference] (CVE-2025-67038) | E220 series: Upgrade to version 3.21.0.0R1 or later. The patch can be found here: [vendor reference] (CVE-2025-67038) | EDS3000PS series: Upgrade to version 3.2.0.0R2 or later. The patch can be found here: [vendor reference] (CVE-2025-67039, CVE-2025-70082, CVE-2025-67041)",
           "evidence_id": "s2.remediation",
-          "quote": "EDS5000 series: Upgrade to version 2.2.0.0R1 or later."
+          "quote": "EDS5000 series: Upgrade to version 2.2.0.0R1 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/2538438657/Latest+Firmware+for+the+EDS5000+series+EDS5008+EDS5016+EDS5032. (CVE-2025-67034, CVE-2025-67035, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | G520 series: Upgrade to version 2.6.0.4R6 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/1889828865/Latest+firmware+for+the+G520+Series+G526+G526RP+G527+G528. (CVE-2025-67034, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | X300 series: Upgrade to version 2.6.0.4R6 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/2135261185/Latest+firmware+for+the+X300+Series+X300+X303+X304. (CVE-2025-67034, CVE-2025-67036, CVE-2025-67037, CVE-2025-67038) | E210 series: Upgrade to version 3.21.0.0R1 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/1914404865/Latest+firmware+ePack+for+the+E210+Series+E213+E214+E215+E218+Cellular+Routers. (CVE-2025-67038) | E220 series: Upgrade to version 3.21.0.0R1 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/1914437633/Latest+firmware+ePack+for+the+E220+Series+E224+E225+E228+Cellular+Routers. (CVE-2025-67038) | EDS3000PS series: Upgrade to version 3.2.0.0R2 or later. The patch can be found here: https://ltrxdev.atlassian.net/wiki/spaces/LTRXTS/pages/1349189633/Latest+Firmware+for+the+EDS3000PS+series. (CVE-2025-67039, CVE-2025-70082, CVE-2025-67041)"
+        },
+        {
+          "section": "action",
+          "text": "Lantronix has released the following updates addressing these vulnerabilities. For more information, see the Lantronix Vulnerability Library ([vendor reference]). | For more information or technical assistance, contact Lantronix support (Support@lantronix.com).",
+          "evidence_id": "s2.workarounds",
+          "quote": "Lantronix has released the following updates addressing these vulnerabilities. For more information, see the Lantronix Vulnerability Library (https://www.lantronix.com/technical-support/security-updates/vulnerability-disclosure-policy/vulnerability-library/?_gl=16c8bez_upMQ.._gaMzQwNjk5ODI5LjE3ODI5MTM3NTk._ga_M2G6RLT5L3*czE3ODI5MTM3NTgkbzEkZzAkdDE3ODI5MTM3NTgkajYwJGwwJGgw). | For more information or technical assistance, contact Lantronix support (Support@lantronix.com)."
         },
         {
           "section": "exploitation",
-          "text": "CISA KEV lists CVE-2025-67038. Do not interpret that as exploitation of every vulnerability in this advisory.",
+          "text": "An issue was discovered in Lantronix EDS3000PS 3.1.0.0R2. The host parameter of the TFTP client in the Filesystem Browser page is not properly sanitized. This can be exploited to escape from the original command and execute an arbitrary one with root privileges. | No known public exploitation specifically targeting these vulnerabilities has been reported to CISA at this time.",
+          "evidence_id": "s2.exploitation",
+          "quote": "An issue was discovered in Lantronix EDS3000PS 3.1.0.0R2. The host parameter of the TFTP client in the Filesystem Browser page is not properly sanitized. This can be exploited to escape from the original command and execute an arbitrary one with root privileges. | No known public exploitation specifically targeting these vulnerabilities has been reported to CISA at this time."
+        },
+        {
+          "section": "exploitation",
+          "text": "CISA KEV matched CVEs: CVE-2025-67038.",
           "evidence_id": "s2.kev",
           "quote": "CISA KEV matched CVEs: CVE-2025-67038"
         }
@@ -149,27 +161,33 @@
       "details": [
         {
           "section": "context",
-          "text": "The vendor describes a vulnerability that may permit an unauthenticated attacker to write arbitrary files using crafted HTTP or HTTPS requests. The explanation here preserves that conditional language rather than claiming that every deployment has been attacked.",
+          "text": "An Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') [CWE-22] and Improper Neutralization of NULL Byte or NULL Character [CWE-158] vulnerability may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests. This has been reported to be exploited in the wild, customers are urged to apply the workaround below.",
           "evidence_id": "s3.summary",
-          "quote": "may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests."
+          "quote": "An Improper Limitation of a Pathname to a Restricted Directory ('Path Traversal') [CWE-22] and Improper Neutralization of NULL Byte or NULL Character [CWE-158] vulnerability may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests. This has been reported to be exploited in the wild, customers are urged to apply the workaround below."
+        },
+        {
+          "section": "affected",
+          "text": "Version Affected Solution FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above FortiMail 7.6 7.6.0 through 7.6.6 Upgrade to 7.6.7 or above FortiMail 7.4 7.4.0 through 7.4.8 Upgrade to 7.4.9 or above FortiMail 7.2 7.2.0 through 7.2.9 Upgrade to branch 7.4 or above",
+          "evidence_id": "s3.affected",
+          "quote": "Version Affected Solution FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above FortiMail 7.6 7.6.0 through 7.6.6 Upgrade to 7.6.7 or above FortiMail 7.4 7.4.0 through 7.4.8 Upgrade to 7.4.9 or above FortiMail 7.2 7.2.0 through 7.2.9 Upgrade to branch 7.4 or above"
+        },
+        {
+          "section": "action",
+          "text": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' ) or with the following CLI command: config system encryption ibe set status disable end Alternatively: - Disable access to the FortiMail webmail interface from the internet or limit the access only from trusted private network - Or if there is a Web Application Firewall in front of FortiMail, block POST requests to /ibe that contain '../'",
+          "evidence_id": "s3.workarounds",
+          "quote": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' ) or with the following CLI command: config system encryption ibe set status disable end Alternatively: - Disable access to the FortiMail webmail interface from the internet or limit the access only from trusted private network - Or if there is a Web Application Firewall in front of FortiMail, block POST requests to /ibe that contain '../'"
         },
         {
           "section": "exploitation",
-          "text": "Fortinet reports exploitation in the wild.",
+          "text": "This has been reported to be exploited in the wild, customers are urged to apply the workaround below.",
           "evidence_id": "s3.exploitation",
           "quote": "This has been reported to be exploited in the wild, customers are urged to apply the workaround below."
         },
         {
-          "section": "action",
-          "text": "For FortiMail 8.0, the cited table identifies 8.0.0 through 8.0.1 as affected and lists 8.0.2 or above as the upgrade target. This is one branch-specific example; use the complete vendor table for a different branch.",
-          "evidence_id": "s3.remediation",
-          "quote": "FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above"
-        },
-        {
-          "section": "action",
-          "text": "The listed workaround is to disable IBE feature support in the GUI. Consult the vendor guidance before changing configuration.",
-          "evidence_id": "s3.workarounds",
-          "quote": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' )"
+          "section": "exploitation",
+          "text": "CISA KEV matched CVEs: CVE-2026-104286.",
+          "evidence_id": "s3.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2026-104286"
         }
       ]
     },
@@ -193,13 +211,13 @@
       "details": [
         {
           "section": "context",
-          "text": "The Hacker News reports that CISA added five security flaws to KEV following their reported abuse by the China-linked actor Flax Typhoon. This is publisher-attributed reporting, not independent verification of the actor attribution.",
+          "text": "The U.S. Cybersecurity and Infrastructure Security Agency (CISA) on Thursday added five security flaws to its Known Exploited Vulnerabilities (KEV) catalog, following their abuse by a China-linked threat actor known as Flax Typhoon. [The supplied excerpt ends before the remaining explanation.]",
           "evidence_id": "s4.summary",
           "quote": "The U.S. Cybersecurity and Infrastructure Security Agency (CISA) on Thursday added five security flaws to its Known Exploited Vulnerabilities (KEV) catalog, following their abuse by a China-linked threat actor known as Flax Typhoon. The vulnerabilities in question are listed below - CVE-2015-3306 (CVSS score: 10.0) - An improper access control vulnerability in ProFTPD that could allow"
         },
         {
           "section": "exploitation",
-          "text": "The supplied KEV signal confirms membership for CVE-2015-3306. It does not independently establish the reported actor attribution or exploitation of every other flaw mentioned in the article.",
+          "text": "CISA KEV matched CVEs: CVE-2015-3306.",
           "evidence_id": "s4.kev",
           "quote": "CISA KEV matched CVEs: CVE-2015-3306"
         }
@@ -242,25 +260,31 @@
       "details": [
         {
           "section": "context",
-          "text": "Cisco describes vulnerabilities in NX-OS NGOAM that could allow an unauthenticated remote attacker to execute code with root privileges or cause denial of service. This describes potential impact; it is not evidence that a specific switch has been compromised.",
+          "text": "Multiple vulnerabilities in the Operation, Administration, and Maintenance (OAM) feature of Cisco NX-OS Software, known as Next Generation OAM (NGOAM), could allow an unauthenticated, remote attacker to execute arbitrary code with root privileges or cause a denial of service (DoS) condition on an affected device. These vulnerabilities are due to improper input validation of IP traffic when NGOAM is enabled. An attacker could exploit these vulnerabilities by sending crafted packets to an IP interface on an affected device. A successful exploit could allow the attacker to execute arbitrary code with root privileges and could cause process crashes, which could result in a reload of the device and a DoS condition. Note: Feature requirements vary for each vulnerability. For details, see the Vulnerable Products section of this advisory. Cisco has released software updates that address these vulnerabilities. There are no workarounds that address these vulnerabilities. [The supplied excerpt ends before the remaining explanation.]",
           "evidence_id": "s5.summary",
-          "quote": "Multiple vulnerabilities in the Operation, Administration, and Maintenance (OAM) feature of Cisco NX-OS Software, known as Next Generation OAM (NGOAM), could allow an unauthenticated, remote attacker to execute arbitrary code with root privileges or cause a denial of service (DoS) condition on an affected device."
+          "quote": "Multiple vulnerabilities in the Operation, Administration, and Maintenance (OAM) feature of Cisco NX-OS Software, known as Next Generation OAM (NGOAM), could allow an unauthenticated, remote attacker to execute arbitrary code with root privileges or cause a denial of service (DoS) condition on an affected device. These vulnerabilities are due to improper input validation of IP traffic when NGOAM is enabled. An attacker could exploit these vulnerabilities by sending crafted packets to an IP interface on an affected device. A successful exploit could allow the attacker to execute arbitrary code with root privileges and could cause process crashes, which could result in a reload of the device and a DoS condition. Note: Feature requirements vary for each vulnerability. For details, see the Vulnerable Products section of this advisory. Cisco has released software updates that address these vulnerabilities. There are no workarounds that address these vulnerabilities. This advisory is available at the following link: https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU This advisory is part of a group"
         },
         {
           "section": "affected",
-          "text": "The affected-product section names Nexus 3000 and Nexus 9000 switches in standalone NX-OS mode, with NGOAM enabled and additional conditions depending on the CVE. Do not generalize the same prerequisite to every issue in this advisory.",
+          "text": "These vulnerabilities affect Cisco Nexus 3000 Series Switches and Cisco Nexus 9000 Series Switches in standalone NX-OS mode if NGOAM is enabled and specific features are configured, as detailed in the following list: CVE-2026-76485: To be affected by this vulnerability, the switch must have NGOAM enabled. That is the only requirement. CVE-2026-76486: To be affected by this vulnerability, the switch must have NGOAM enabled and either Segment Routing over IPv6 (SRv6) or Network Virtualization (NV) Overlay enabled. NV Overlay also requires a VXLAN Ethernet VPN (EVPN) VXLAN Network Identifier (VNI) mapped to a Network Virtualization Endpoint (NVE) interface with at least one peer VXLAN Tunnel Endpoint (VTEP) learned (for example, BGP EVPN or an ingress-replication static peer). CVE-2026-76501: To be affected by this vulnerability, the switch must have both NGOAM and SRv6 enabled. Note: Cisco Nexus 3000 Series switches do not support SRv6, and only a subset of Cisco Nexus 9000 Series switches support SRv6. For more information, see Cisco Nexus 9000 Series NX-OS SRv6 Configuration Guide, Release 10.6(x) . Determine the Status of NGOAM To determine whether a device is configured with NGOAM enabled, use the show feature | include ngoam command at the Cisco NX-OS CLI. The following example shows NGOAM enabled on a device that is running Cisco NX-OS Software: switch# show feature | include ngoam ngoam 1 enabled Determine the Status of NV Overlay To determine whether a device is configured with NV Overlay enabled, use the show feature | include nve command at the Cisco NX-OS CLI. The following example shows NV Overlay enabled on a device that is running Cisco NX-OS Software: switch# show feature | include nve nve 1 disabled switch# configure switch(config)# feature nv overlay switch(config)# show feature | include nve nve 1 enabled Determine the Status of the NV Overlay VXLAN [The supplied source section is truncated; remaining details are not inferred.]",
           "evidence_id": "s5.affected",
-          "quote": "These vulnerabilities affect Cisco Nexus 3000 Series Switches and Cisco Nexus 9000 Series Switches in standalone NX-OS mode if NGOAM is enabled and specific features are configured, as detailed in the following list:"
+          "quote": "These vulnerabilities affect Cisco Nexus 3000 Series Switches and Cisco Nexus 9000 Series Switches in standalone NX-OS mode if NGOAM is enabled and specific features are configured, as detailed in the following list: CVE-2026-76485: To be affected by this vulnerability, the switch must have NGOAM enabled. That is the only requirement. CVE-2026-76486: To be affected by this vulnerability, the switch must have NGOAM enabled and either Segment Routing over IPv6 (SRv6) or Network Virtualization (NV) Overlay enabled. NV Overlay also requires a VXLAN Ethernet VPN (EVPN) VXLAN Network Identifier (VNI) mapped to a Network Virtualization Endpoint (NVE) interface with at least one peer VXLAN Tunnel Endpoint (VTEP) learned (for example, BGP EVPN or an ingress-replication static peer). CVE-2026-76501: To be affected by this vulnerability, the switch must have both NGOAM and SRv6 enabled. Note: Cisco Nexus 3000 Series switches do not support SRv6, and only a subset of Cisco Nexus 9000 Series switches support SRv6. For more information, see Cisco Nexus 9000 Series NX-OS SRv6 Configuration Guide, Release 10.6(x) . Determine the Status of NGOAM To determine whether a device is configured with NGOAM enabled, use the show feature | include ngoam command at the Cisco NX-OS CLI. The following example shows NGOAM enabled on a device that is running Cisco NX-OS Software: switch# show feature | include ngoam ngoam 1 enabled Determine the Status of NV Overlay To determine whether a device is configured with NV Overlay enabled, use the show feature | include nve command at the Cisco NX-OS CLI. The following example shows NV Overlay enabled on a device that is running Cisco NX-OS Software: switch# show feature | include nve nve 1 disabled switch# configure switch(config)# feature nv overlay switch(config)# show feature | include nve nve 1 enabled Determine the Status of the NV Overlay VXLAN"
         },
         {
           "section": "action",
-          "text": "Cisco calls disabling unneeded NGOAM a mitigation for all three vulnerabilities. This is distinct from a permanent software fix; verify feature dependencies and the complete vendor guidance before changing a deployed switch.",
+          "text": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Cisco NX-OS Software To help customers determine their exposure to vulnerabilities in Cisco NX-OS Software, Cisco provides the Cisco Software Checker . This tool identifies any Cisco security advisories that impact a specific software release and the earliest release that fixes the vulnerabilities that are described in each advisory (\u201cFirst Fixed\u201d). If applicable, the tool also returns the earliest release that fixes all the vulnerabilities described in all the advisories that the Software Checker identifies (\u201cCombined First Fixed\u201d). To use the tool, go to the Cisco Software Checker page and follow the instructions. Alternatively, use the following form to search for vulnerabilities that affect a specific software release. To use the form, follow these steps: Choose which advisories the tool will search-only this advisory, only advisories with a Critical or High Security Impact Rating (SIR) , or all advisories. Choose the appropriate software. Choose the appropriate platform. Enter a release number-for example, 10.4(4) for Cisco Nexus 3000 Series Switches or 16.0(8e) for Cisco NX-OS Software in ACI mode. Click Check .",
+          "evidence_id": "s5.remediation",
+          "quote": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Cisco NX-OS Software To help customers determine their exposure to vulnerabilities in Cisco NX-OS Software, Cisco provides the Cisco Software Checker . This tool identifies any Cisco security advisories that impact a specific software release and the earliest release that fixes the vulnerabilities that are described in each advisory (\u201cFirst Fixed\u201d). If applicable, the tool also returns the earliest release that fixes all the vulnerabilities described in all the advisories that the Software Checker identifies (\u201cCombined First Fixed\u201d). To use the tool, go to the Cisco Software Checker page and follow the instructions. Alternatively, use the following form to search for vulnerabilities that affect a specific software release. To use the form, follow these steps: Choose which advisories the tool will search-only this advisory, only advisories with a Critical or High Security Impact Rating (SIR) , or all advisories. Choose the appropriate software. Choose the appropriate platform. Enter a release number-for example, 10.4(4) for Cisco Nexus 3000 Series Switches or 16.0(8e) for Cisco NX-OS Software in ACI mode. Click Check ."
+        },
+        {
+          "section": "action",
+          "text": "There are no workarounds that address these vulnerabilities. If the NGOAM feature is not required, disabling it removes the attack vector and is a mitigation for all three vulnerabilities. Disable the NGOAM by using the Cisco NX-OS CLI command no feature ngoam in global configuration mode on a Cisco Nexus 3000 Series or 9000 Series Switch. While this mitigation has been deployed and was proven successful in a test environment, customers should determine the applicability and effectiveness in their own environment and under their own use conditions. Customers should be aware that any workaround or mitigation that is implemented may negatively impact the functionality or performance of their network based on intrinsic customer deployment scenarios and limitations. Customers should not deploy any workarounds or mitigations before first evaluating the applicability to their own environment and any impact to such environment. Live Protect Shields Cisco has released Live Protect shields for CVE-2026-76485, CVE-2026-76486, and CVE-2026-76501 to temporarily mitigate these vulnerabilities for Cisco NX-OS Software. For information about Live Protect for Cisco NX-OS Software, see Cisco Nexus 9000 Series NX-OS Security Configuration Guide . Note: Live Protect shields are temporary mitigations to bridge the gap until software updates can be scheduled. To remediate this vulnerability, upgrade to a fixed software release as noted in the Fixed Software section of this advisory.",
           "evidence_id": "s5.workarounds",
-          "quote": "If the NGOAM feature is not required, disabling it removes the attack vector and is a mitigation for all three vulnerabilities."
+          "quote": "There are no workarounds that address these vulnerabilities. If the NGOAM feature is not required, disabling it removes the attack vector and is a mitigation for all three vulnerabilities. Disable the NGOAM by using the Cisco NX-OS CLI command no feature ngoam in global configuration mode on a Cisco Nexus 3000 Series or 9000 Series Switch. While this mitigation has been deployed and was proven successful in a test environment, customers should determine the applicability and effectiveness in their own environment and under their own use conditions. Customers should be aware that any workaround or mitigation that is implemented may negatively impact the functionality or performance of their network based on intrinsic customer deployment scenarios and limitations. Customers should not deploy any workarounds or mitigations before first evaluating the applicability to their own environment and any impact to such environment. Live Protect Shields Cisco has released Live Protect shields for CVE-2026-76485, CVE-2026-76486, and CVE-2026-76501 to temporarily mitigate these vulnerabilities for Cisco NX-OS Software. For information about Live Protect for Cisco NX-OS Software, see Cisco Nexus 9000 Series NX-OS Security Configuration Guide . Note: Live Protect shields are temporary mitigations to bridge the gap until software updates can be scheduled. To remediate this vulnerability, upgrade to a fixed software release as noted in the Fixed Software section of this advisory."
         },
         {
           "section": "exploitation",
-          "text": "Cisco PSIRT states it is not aware of public announcements or malicious use of these vulnerabilities. Preserve that attributed statement; absence of a report does not prove that exploitation is impossible.",
+          "text": "The Cisco Product Security Incident Response Team (PSIRT) is not aware of any public announcements or malicious use of the vulnerabilities that are described in this advisory.",
           "evidence_id": "s5.exploitation",
           "quote": "The Cisco Product Security Incident Response Team (PSIRT) is not aware of any public announcements or malicious use of the vulnerabilities that are described in this advisory."
         }
@@ -301,25 +325,25 @@
       "details": [
         {
           "section": "context",
-          "text": "Microsoft describes a heap-based buffer overflow in Windows Media Foundation that allows an unauthorized attacker to execute code over a network. The compact extract does not establish every attack prerequisite; review the complete CVE record.",
+          "text": "Heap-based buffer overflow in Microsoft Windows Media Foundation allows an unauthorized attacker to execute code over a network.",
           "evidence_id": "s6.summary",
           "quote": "Heap-based buffer overflow in Microsoft Windows Media Foundation allows an unauthorized attacker to execute code over a network."
         },
         {
           "section": "affected",
-          "text": "The affected records list Windows Server 2025 and multiple Windows 11 versions and architectures. Confirm the exact deployed release against the full Microsoft record; the extract should not be treated as a complete compatibility table.",
+          "text": "Windows Server 2025 (Server Core installation) | Windows 11 Version 25H2 for ARM64-based Systems | Windows 11 Version 25H2 for x64-based Systems | Windows 11 Version 24H2 for ARM64-based Systems | Windows 11 Version 24H2 for x64-based Systems | Windows Server 2025 | Windows 11 version 26H1 for x64-based Systems | Windows 11 Version 26H1 for ARM64-based Systems",
           "evidence_id": "s6.affected",
-          "quote": "Windows Server 2025 (Server Core installation) | Windows 11 Version 25H2 for ARM64-based Systems | Windows 11 Version 25H2 for x64-based Systems | Windows 11 Version 24H2 for ARM64-based Systems | Windows 11 Version 24H2 for x64-based Systems | Windows Server 2025 | Windows 11 version 26H1 for x64-based Systems | Windows 11 Version 26H1"
+          "quote": "Windows Server 2025 (Server Core installation) | Windows 11 Version 25H2 for ARM64-based Systems | Windows 11 Version 25H2 for x64-based Systems | Windows 11 Version 24H2 for ARM64-based Systems | Windows 11 Version 24H2 for x64-based Systems | Windows Server 2025 | Windows 11 version 26H1 for x64-based Systems | Windows 11 Version 26H1 for ARM64-based Systems"
         },
         {
           "section": "action",
-          "text": "For the supplied Windows Server 2025 entry, Microsoft lists update 5122871 and fixed build 10.0.26100.33438. Other Windows 11 branches have their own KB/build mappings. Do not apply a server build number to a different product.",
+          "text": "5122871 | Fixed build: 10.0.26100.33438 | [vendor reference] | Products: Windows Server 2025 (Server Core installation), Windows Server 2025 | 5124008 | Fixed build: 10.0.26200.9445 | [vendor reference] | Products: Windows 11 Version 25H2 for ARM64-based Systems, Windows 11 Version 25H2 for x64-based Systems | 5124008 | Fixed build: 10.0.26100.9445 | [vendor reference] | Products: Windows 11 Version 24H2 for ARM64-based Systems, Windows 11 Version 24H2 for x64-based Systems | 5124012 | Fixed build: 10.0.28000.2954 | [vendor reference] | Products: Windows 11 version 26H1 for x64-based Systems, Windows 11 Version 26H1 for ARM64-based Systems",
           "evidence_id": "s6.remediation",
-          "quote": "5122871 | Fixed build: 10.0.26100.33438 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5122871 | Products: Windows Server 2025 (Server Core installation), Windows Server 2025"
+          "quote": "5122871 | Fixed build: 10.0.26100.33438 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5122871 | Products: Windows Server 2025 (Server Core installation), Windows Server 2025 | 5124008 | Fixed build: 10.0.26200.9445 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5124008 | Products: Windows 11 Version 25H2 for ARM64-based Systems, Windows 11 Version 25H2 for x64-based Systems | 5124008 | Fixed build: 10.0.26100.9445 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5124008 | Products: Windows 11 Version 24H2 for ARM64-based Systems, Windows 11 Version 24H2 for x64-based Systems | 5124012 | Fixed build: 10.0.28000.2954 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5124012 | Products: Windows 11 version 26H1 for x64-based Systems, Windows 11 Version 26H1 for ARM64-based Systems"
         },
         {
           "section": "exploitation",
-          "text": "The structured Microsoft record says Publicly Disclosed: No and Exploited: No, with exploitation assessed as unlikely for the latest release. These are the source\u2019s recorded values, not a guarantee about future exploitation.",
+          "text": "Publicly Disclosed:No;Exploited:No;Latest Software Release:Exploitation Unlikely",
           "evidence_id": "s6.exploitation",
           "quote": "Publicly Disclosed:No;Exploited:No;Latest Software Release:Exploitation Unlikely"
         }
@@ -342,9 +366,9 @@
       "details": [
         {
           "section": "context",
-          "text": "The retrieved excerpt introduces Pierre Cadieux and describes cybersecurity experience, including endpoint security, policy, firewalls, risk management, and compliance. It does not supply a supported attack sequence, affected-version table, or remediation instructions. Those details should not be invented from the newsletter title.",
+          "text": "The supplied Talos excerpt is an author introduction. It contains no substantive technical account to expand into an attack or remediation report. No additional technical details are inferred.",
           "evidence_id": "s7.summary",
-          "quote": "My name is Pierre Cadieux, and I\u2019ll be helping contribute to these newsletters. A little about me: I\u2019ve been working in the cybersecurity industry in many roles over the past 20+ years, first focusing on endpoint security, policies, and firewalls, then moving to risk management and compliance, disaster recovery, and investigations. I spent about 15 years as a consultant working"
+          "quote": "My name is Pierre Cadieux, and I\u2019ll be helping contribute to these newsletters. A little about me: I\u2019ve been working in the cybersecurity industry in many roles over the past 20+ years, first focusing on endpoint security, policies, and firewalls, then moving to risk management and compliance, disaster recovery, and investigations. I spent about 15 years as a consultant working across many well-known consultancy firms and eventually moved to Cisco where I spent time doing security operations center (SOC) design and assessments as well as segmentation before moving to the Talos IR team. I spent many years there, first as an Incident Commander and then a manager of our excellent team of global IR consultants and investigators. My current role is with the Talos Threat Intelligence and Interdiction team, where I\u2019m focused on intelligence efficacy \u2014 how we can do better with the data we have, how we can get more data, and what our customers want from our intelligence"
         }
       ],
       "missing": [
@@ -380,21 +404,27 @@
       "details": [
         {
           "section": "context",
-          "text": "BleepingComputer reports attacks against a maximum-severity SMA1000 vulnerability identified as CVE-2026-102255. Treat the exploitation statement as publisher-attributed reporting; the detailed source distinguishes the vendor\u2019s advisory from a researcher\u2019s observations.",
+          "text": "Attackers are exploiting a maximum-severity vulnerability in SonicWall SMA1000 appliances (CVE-2026-102255) that was patched on Tuesday, three days ago.",
           "evidence_id": "s8.summary",
           "quote": "Attackers are exploiting a maximum-severity vulnerability in SonicWall SMA1000 appliances (CVE-2026-102255) that was patched on Tuesday, three days ago."
         },
         {
           "section": "affected",
-          "text": "The article identifies the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v. It explicitly says the issue does not affect the SMA100 Series or SSL-VPN on SonicWall firewalls. Exact affected software releases are not supplied here.",
+          "text": "Tracked as CVE-2026-102255 , the flaw affects the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v models, but does not affect the SMA 100 Series product line or SSL-VPN running on SonicWall firewalls.",
           "evidence_id": "s8.affected",
           "quote": "Tracked as CVE-2026-102255 , the flaw affects the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v models, but does not affect the SMA 100 Series product line or SSL-VPN running on SonicWall firewalls."
         },
         {
           "section": "exploitation",
-          "text": "The quoted source says SonicWall had not flagged active exploitation in the Tuesday advisory, while researcher Ryan Dewhurst reported honeypot activity consistent with this CVE to BleepingComputer. Preserve both statements rather than presenting them as a single vendor-confirmed conclusion.",
+          "text": "While SonicWall has not yet flagged this vulnerability as actively exploited in its Tuesday advisory, Previdian founder and security researcher Ryan Dewhurst told BleepingComputer on Friday that the company's honeypot network has detected exploitation attempts consistent with the CVE-2026-102255 flaw.",
           "evidence_id": "s8.exploitation",
           "quote": "While SonicWall has not yet flagged this vulnerability as actively exploited in its Tuesday advisory, Previdian founder and security researcher Ryan Dewhurst told BleepingComputer on Friday that the company's honeypot network has detected exploitation attempts consistent with the CVE-2026-102255 flaw."
+        },
+        {
+          "section": "exploitation",
+          "text": "CISA KEV matched CVEs: CVE-2026-15409, CVE-2026-15410, CVE-2026-83548, CVE-2026-83549.",
+          "evidence_id": "s8.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2026-15409, CVE-2026-15410, CVE-2026-83548, CVE-2026-83549"
         }
       ],
       "missing": [
@@ -417,7 +447,7 @@
       "details": [
         {
           "section": "context",
-          "text": "The Record says Japan\u2019s National Police Agency confirmed the arrest and extradition of a Russian national accused of involvement in the Qilin ransomware gang. \u201cAccused\u201d must remain explicit: this extract does not establish a conviction, an attack chain, or new defensive guidance.",
+          "text": "Japan\u2019s National Police Agency confirmed on Thursday the arrest and extradition of a Russian national accused of being involved in the Qilin ransomware gang.",
           "evidence_id": "s9.summary",
           "quote": "Japan\u2019s National Police Agency confirmed on Thursday the arrest and extradition of a Russian national accused of being involved in the Qilin ransomware gang."
         }
@@ -449,13 +479,13 @@
       "details": [
         {
           "section": "context",
-          "text": "The Cyber Centre\u2019s supplied summary asks users and administrators to review its linked sources and apply necessary updates as they become available. The compact affected-product excerpt is incomplete, so exact product versions and fixes cannot be stated reliably here.",
+          "text": "The Cyber Centre encourages users and administrators to review the provided web links and apply any necessary updates as they become available.",
           "evidence_id": "s10.summary",
           "quote": "The Cyber Centre encourages users and administrators to review the provided web links and apply any necessary updates as they become available."
         },
         {
           "section": "affected",
-          "text": "The affected-product extract begins with a statement that SmarterTools is affected as of October 8, 2026, but the provided text ends before naming the product. Consult the reference for that missing detail rather than inferring it.",
+          "text": "As of October 8, 2026, SmarterTools is affected by a vulnerability in the following product:",
           "evidence_id": "s10.affected",
           "quote": "As of October 8, 2026, SmarterTools is affected by a vulnerability in the following product:"
         }
