@@ -172,26 +172,300 @@
           "quote": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' )"
         }
       ]
-    }
-  ],
-  "overview": [
-    {
-      "story_id": "s1",
-      "text": "The Canadian Cyber Centre warns of critical vulnerabilities affecting NetScaler ADC and NetScaler Gateway.",
-      "evidence_id": "s1.affected",
-      "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances."
     },
     {
-      "story_id": "s2",
-      "text": "CISA warns that successful exploitation could bypass authentication and run code with root-level privileges.",
-      "evidence_id": "s2.summary",
-      "quote": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges."
+      "id": "s4",
+      "title": "Flax Typhoon: reported exploitation and KEV additions",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "The Hacker News links five reported CISA KEV additions to Flax Typhoon activity.",
+          "evidence_id": "s4.summary",
+          "quote": "The U.S. Cybersecurity and Infrastructure Security Agency (CISA) on Thursday added five security flaws to its Known Exploited Vulnerabilities (KEV) catalog, following their abuse by a China-linked threat actor known as Flax Typhoon. The vulnerabilities in question are listed below - CVE-2015-3306 (CVSS score: 10.0) - An improper access control vulnerability in ProFTPD that could allow"
+        },
+        {
+          "kind": "exploitation",
+          "text": "The supplied catalog match confirms CVE-2015-3306 only.",
+          "evidence_id": "s4.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2015-3306"
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "The Hacker News reports that CISA added five security flaws to KEV following their reported abuse by the China-linked actor Flax Typhoon. This is publisher-attributed reporting, not independent verification of the actor attribution.",
+          "evidence_id": "s4.summary",
+          "quote": "The U.S. Cybersecurity and Infrastructure Security Agency (CISA) on Thursday added five security flaws to its Known Exploited Vulnerabilities (KEV) catalog, following their abuse by a China-linked threat actor known as Flax Typhoon. The vulnerabilities in question are listed below - CVE-2015-3306 (CVSS score: 10.0) - An improper access control vulnerability in ProFTPD that could allow"
+        },
+        {
+          "section": "exploitation",
+          "text": "The supplied KEV signal confirms membership for CVE-2015-3306. It does not independently establish the reported actor attribution or exploitation of every other flaw mentioned in the article.",
+          "evidence_id": "s4.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2015-3306"
+        }
+      ],
+      "missing": [
+        "versions",
+        "remediation",
+        "workaround"
+      ]
     },
     {
-      "story_id": "s3",
-      "text": "An unauthenticated attacker could write arbitrary files through crafted HTTP or HTTPS requests.",
-      "evidence_id": "s3.summary",
-      "quote": "may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests."
+      "id": "s5",
+      "title": "Cisco NGOAM: remote code execution risk on affected Nexus switches",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "Cisco describes possible unauthenticated code execution or denial of service.",
+          "evidence_id": "s5.summary",
+          "quote": "Multiple vulnerabilities in the Operation, Administration, and Maintenance (OAM) feature of Cisco NX-OS Software, known as Next Generation OAM (NGOAM), could allow an unauthenticated, remote attacker to execute arbitrary code with root privileges or cause a denial of service (DoS) condition on an affected device."
+        },
+        {
+          "kind": "affected",
+          "text": "Nexus 3000/9000 standalone NX-OS exposure depends on NGOAM and vulnerability-specific conditions.",
+          "evidence_id": "s5.affected",
+          "quote": "These vulnerabilities affect Cisco Nexus 3000 Series Switches and Cisco Nexus 9000 Series Switches in standalone NX-OS mode if NGOAM is enabled and specific features are configured, as detailed in the following list:"
+        },
+        {
+          "kind": "action",
+          "text": "If NGOAM is not required, Cisco says disabling it removes the attack vector.",
+          "evidence_id": "s5.workarounds",
+          "quote": "If the NGOAM feature is not required, disabling it removes the attack vector and is a mitigation for all three vulnerabilities."
+        },
+        {
+          "kind": "exploitation",
+          "text": "Cisco PSIRT reports no known public announcements or malicious use.",
+          "evidence_id": "s5.exploitation",
+          "quote": "The Cisco Product Security Incident Response Team (PSIRT) is not aware of any public announcements or malicious use of the vulnerabilities that are described in this advisory."
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "Cisco describes vulnerabilities in NX-OS NGOAM that could allow an unauthenticated remote attacker to execute code with root privileges or cause denial of service. This describes potential impact; it is not evidence that a specific switch has been compromised.",
+          "evidence_id": "s5.summary",
+          "quote": "Multiple vulnerabilities in the Operation, Administration, and Maintenance (OAM) feature of Cisco NX-OS Software, known as Next Generation OAM (NGOAM), could allow an unauthenticated, remote attacker to execute arbitrary code with root privileges or cause a denial of service (DoS) condition on an affected device."
+        },
+        {
+          "section": "affected",
+          "text": "The affected-product section names Nexus 3000 and Nexus 9000 switches in standalone NX-OS mode, with NGOAM enabled and additional conditions depending on the CVE. Do not generalize the same prerequisite to every issue in this advisory.",
+          "evidence_id": "s5.affected",
+          "quote": "These vulnerabilities affect Cisco Nexus 3000 Series Switches and Cisco Nexus 9000 Series Switches in standalone NX-OS mode if NGOAM is enabled and specific features are configured, as detailed in the following list:"
+        },
+        {
+          "section": "action",
+          "text": "Cisco calls disabling unneeded NGOAM a mitigation for all three vulnerabilities. This is distinct from a permanent software fix; verify feature dependencies and the complete vendor guidance before changing a deployed switch.",
+          "evidence_id": "s5.workarounds",
+          "quote": "If the NGOAM feature is not required, disabling it removes the attack vector and is a mitigation for all three vulnerabilities."
+        },
+        {
+          "section": "exploitation",
+          "text": "Cisco PSIRT states it is not aware of public announcements or malicious use of these vulnerabilities. Preserve that attributed statement; absence of a report does not prove that exploitation is impossible.",
+          "evidence_id": "s5.exploitation",
+          "quote": "The Cisco Product Security Incident Response Team (PSIRT) is not aware of any public announcements or malicious use of the vulnerabilities that are described in this advisory."
+        }
+      ],
+      "missing": [
+        "versions"
+      ]
+    },
+    {
+      "id": "s6",
+      "title": "Windows Media Foundation: match the affected version to its fix",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "Microsoft describes network code execution through a heap-based buffer overflow.",
+          "evidence_id": "s6.summary",
+          "quote": "Heap-based buffer overflow in Microsoft Windows Media Foundation allows an unauthorized attacker to execute code over a network."
+        },
+        {
+          "kind": "affected",
+          "text": "Affected records include Windows Server 2025 and several Windows 11 releases.",
+          "evidence_id": "s6.affected",
+          "quote": "Windows Server 2025 (Server Core installation) | Windows 11 Version 25H2 for ARM64-based Systems | Windows 11 Version 25H2 for x64-based Systems | Windows 11 Version 24H2 for ARM64-based Systems | Windows 11 Version 24H2 for x64-based Systems | Windows Server 2025 | Windows 11 version 26H1 for x64-based Systems | Windows 11 Version 26H1"
+        },
+        {
+          "kind": "action",
+          "text": "The Server 2025 entry lists KB5122871 and fixed build 10.0.26100.33438.",
+          "evidence_id": "s6.remediation",
+          "quote": "5122871 | Fixed build: 10.0.26100.33438 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5122871 | Products: Windows Server 2025 (Server Core installation), Windows Server 2025"
+        },
+        {
+          "kind": "exploitation",
+          "text": "Microsoft marks public disclosure and exploitation as \u201cNo\u201d in this record.",
+          "evidence_id": "s6.exploitation",
+          "quote": "Publicly Disclosed:No;Exploited:No;Latest Software Release:Exploitation Unlikely"
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "Microsoft describes a heap-based buffer overflow in Windows Media Foundation that allows an unauthorized attacker to execute code over a network. The compact extract does not establish every attack prerequisite; review the complete CVE record.",
+          "evidence_id": "s6.summary",
+          "quote": "Heap-based buffer overflow in Microsoft Windows Media Foundation allows an unauthorized attacker to execute code over a network."
+        },
+        {
+          "section": "affected",
+          "text": "The affected records list Windows Server 2025 and multiple Windows 11 versions and architectures. Confirm the exact deployed release against the full Microsoft record; the extract should not be treated as a complete compatibility table.",
+          "evidence_id": "s6.affected",
+          "quote": "Windows Server 2025 (Server Core installation) | Windows 11 Version 25H2 for ARM64-based Systems | Windows 11 Version 25H2 for x64-based Systems | Windows 11 Version 24H2 for ARM64-based Systems | Windows 11 Version 24H2 for x64-based Systems | Windows Server 2025 | Windows 11 version 26H1 for x64-based Systems | Windows 11 Version 26H1"
+        },
+        {
+          "section": "action",
+          "text": "For the supplied Windows Server 2025 entry, Microsoft lists update 5122871 and fixed build 10.0.26100.33438. Other Windows 11 branches have their own KB/build mappings. Do not apply a server build number to a different product.",
+          "evidence_id": "s6.remediation",
+          "quote": "5122871 | Fixed build: 10.0.26100.33438 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5122871 | Products: Windows Server 2025 (Server Core installation), Windows Server 2025"
+        },
+        {
+          "section": "exploitation",
+          "text": "The structured Microsoft record says Publicly Disclosed: No and Exploited: No, with exploitation assessed as unlikely for the latest release. These are the source\u2019s recorded values, not a guarantee about future exploitation.",
+          "evidence_id": "s6.exploitation",
+          "quote": "Publicly Disclosed:No;Exploited:No;Latest Software Release:Exploitation Unlikely"
+        }
+      ],
+      "missing": [
+        "workaround"
+      ]
+    },
+    {
+      "id": "s7",
+      "title": "Talos newsletter: introductory extract, limited technical detail",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "The supplied Talos extract is an author introduction, not a complete technical advisory.",
+          "evidence_id": "s7.summary",
+          "quote": "My name is Pierre Cadieux, and I\u2019ll be helping contribute to these newsletters. A little about me: I\u2019ve been working in the cybersecurity industry in many roles over the past 20+ years, first focusing on endpoint security, policies, and firewalls, then moving to risk management and compliance, disaster recovery, and investigations. I spent about 15 years as a consultant working"
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "The retrieved excerpt introduces Pierre Cadieux and describes cybersecurity experience, including endpoint security, policy, firewalls, risk management, and compliance. It does not supply a supported attack sequence, affected-version table, or remediation instructions. Those details should not be invented from the newsletter title.",
+          "evidence_id": "s7.summary",
+          "quote": "My name is Pierre Cadieux, and I\u2019ll be helping contribute to these newsletters. A little about me: I\u2019ve been working in the cybersecurity industry in many roles over the past 20+ years, first focusing on endpoint security, policies, and firewalls, then moving to risk management and compliance, disaster recovery, and investigations. I spent about 15 years as a consultant working"
+        }
+      ],
+      "missing": [
+        "versions",
+        "remediation",
+        "exploitation",
+        "workaround"
+      ]
+    },
+    {
+      "id": "s8",
+      "title": "SonicWall SMA1000: reported exploitation requires careful attribution",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "BleepingComputer reports exploitation of CVE-2026-102255 in SMA1000 appliances.",
+          "evidence_id": "s8.summary",
+          "quote": "Attackers are exploiting a maximum-severity vulnerability in SonicWall SMA1000 appliances (CVE-2026-102255) that was patched on Tuesday, three days ago."
+        },
+        {
+          "kind": "affected",
+          "text": "The named models are SMA1000 6210, 7210, and 8200v; the excerpt excludes SMA100 and firewall SSL-VPN.",
+          "evidence_id": "s8.affected",
+          "quote": "Tracked as CVE-2026-102255 , the flaw affects the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v models, but does not affect the SMA 100 Series product line or SSL-VPN running on SonicWall firewalls."
+        },
+        {
+          "kind": "exploitation",
+          "text": "A researcher reports honeypot attempts consistent with the flaw; vendor confirmation differs.",
+          "evidence_id": "s8.exploitation",
+          "quote": "While SonicWall has not yet flagged this vulnerability as actively exploited in its Tuesday advisory, Previdian founder and security researcher Ryan Dewhurst told BleepingComputer on Friday that the company's honeypot network has detected exploitation attempts consistent with the CVE-2026-102255 flaw."
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "BleepingComputer reports attacks against a maximum-severity SMA1000 vulnerability identified as CVE-2026-102255. Treat the exploitation statement as publisher-attributed reporting; the detailed source distinguishes the vendor\u2019s advisory from a researcher\u2019s observations.",
+          "evidence_id": "s8.summary",
+          "quote": "Attackers are exploiting a maximum-severity vulnerability in SonicWall SMA1000 appliances (CVE-2026-102255) that was patched on Tuesday, three days ago."
+        },
+        {
+          "section": "affected",
+          "text": "The article identifies the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v. It explicitly says the issue does not affect the SMA100 Series or SSL-VPN on SonicWall firewalls. Exact affected software releases are not supplied here.",
+          "evidence_id": "s8.affected",
+          "quote": "Tracked as CVE-2026-102255 , the flaw affects the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v models, but does not affect the SMA 100 Series product line or SSL-VPN running on SonicWall firewalls."
+        },
+        {
+          "section": "exploitation",
+          "text": "The quoted source says SonicWall had not flagged active exploitation in the Tuesday advisory, while researcher Ryan Dewhurst reported honeypot activity consistent with this CVE to BleepingComputer. Preserve both statements rather than presenting them as a single vendor-confirmed conclusion.",
+          "evidence_id": "s8.exploitation",
+          "quote": "While SonicWall has not yet flagged this vulnerability as actively exploited in its Tuesday advisory, Previdian founder and security researcher Ryan Dewhurst told BleepingComputer on Friday that the company's honeypot network has detected exploitation attempts consistent with the CVE-2026-102255 flaw."
+        }
+      ],
+      "missing": [
+        "versions",
+        "remediation",
+        "workaround"
+      ]
+    },
+    {
+      "id": "s9",
+      "title": "Qilin: reported arrest and extradition, not a new technical advisory",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "The Record reports Japan\u2019s confirmation of an arrest and extradition in a Qilin-related case.",
+          "evidence_id": "s9.summary",
+          "quote": "Japan\u2019s National Police Agency confirmed on Thursday the arrest and extradition of a Russian national accused of being involved in the Qilin ransomware gang."
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "The Record says Japan\u2019s National Police Agency confirmed the arrest and extradition of a Russian national accused of involvement in the Qilin ransomware gang. \u201cAccused\u201d must remain explicit: this extract does not establish a conviction, an attack chain, or new defensive guidance.",
+          "evidence_id": "s9.summary",
+          "quote": "Japan\u2019s National Police Agency confirmed on Thursday the arrest and extradition of a Russian national accused of being involved in the Qilin ransomware gang."
+        }
+      ],
+      "missing": [
+        "versions",
+        "remediation",
+        "exploitation",
+        "workaround"
+      ]
+    },
+    {
+      "id": "s10",
+      "title": "SmarterTools advisory: review the source before choosing an update",
+      "bullets": [
+        {
+          "kind": "what",
+          "text": "The Canadian Cyber Centre encourages review of linked guidance and necessary updates.",
+          "evidence_id": "s10.summary",
+          "quote": "The Cyber Centre encourages users and administrators to review the provided web links and apply any necessary updates as they become available."
+        },
+        {
+          "kind": "affected",
+          "text": "The extract identifies a SmarterTools vulnerability but does not complete the product/version list.",
+          "evidence_id": "s10.affected",
+          "quote": "As of October 8, 2026, SmarterTools is affected by a vulnerability in the following product:"
+        }
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "The Cyber Centre\u2019s supplied summary asks users and administrators to review its linked sources and apply necessary updates as they become available. The compact affected-product excerpt is incomplete, so exact product versions and fixes cannot be stated reliably here.",
+          "evidence_id": "s10.summary",
+          "quote": "The Cyber Centre encourages users and administrators to review the provided web links and apply any necessary updates as they become available."
+        },
+        {
+          "section": "affected",
+          "text": "The affected-product extract begins with a statement that SmarterTools is affected as of October 8, 2026, but the provided text ends before naming the product. Consult the reference for that missing detail rather than inferring it.",
+          "evidence_id": "s10.affected",
+          "quote": "As of October 8, 2026, SmarterTools is affected by a vulnerability in the following product:"
+        }
+      ],
+      "missing": [
+        "versions",
+        "remediation",
+        "exploitation",
+        "workaround"
+      ]
     }
   ]
 }

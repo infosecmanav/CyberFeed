@@ -7,6 +7,27 @@
   "errors": [],
   "stories": [
     {
+      "references": [
+        {
+          "source": "Canadian Centre for Cyber Security",
+          "url": "https://www.cyber.gc.ca/en/alerts-advisories/al26-024-critical-vulnerabilities-affecting-citrix-netscaler-adc-netscaler-gateway-cve-2026-88771-cve-2026-88772",
+          "published": "2026-10-09T18:16:08+00:00"
+        },
+        {
+          "source": "Canadian Centre for Cyber Security",
+          "url": "https://cyber.gc.ca/en/alerts-advisories/al26-024-critical-vulnerabilities-affecting-citrix-netscaler-adc-netscaler-gateway-cve-2026-88771-cve-2026-88772",
+          "published": "2026-10-09T18:16:08+00:00"
+        },
+        {
+          "source": "Google Threat Intelligence / Mandiant",
+          "url": "https://cloud.google.com/blog/topics/threat-intelligence/defending-against-active-exploitation-of-citrix-netscaler-adc-and-gateway-appliances/",
+          "published": null
+        },
+        {
+          "source": "CISA KEV official catalog mirror",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
       "id": "s1",
       "title": "AL26-024 - Critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway \u2013 CVE-2026-88771 and CVE-2026-88772 \u2013 Update 2",
       "source": "Canadian Centre for Cyber Security",
@@ -41,6 +62,17 @@
       ]
     },
     {
+      "references": [
+        {
+          "source": "CISA",
+          "url": "https://raw.githubusercontent.com/cisagov/CSAF/develop/csaf_files/OT/white/2026/icsa-26-069-02.json",
+          "published": "2026-10-08T06:00:00+00:00"
+        },
+        {
+          "source": "CISA KEV official catalog mirror",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
       "id": "s2",
       "title": "Lantronix EDS3000PS and EDS5000 (Update B)",
       "source": "CISA",
@@ -80,6 +112,22 @@
       ]
     },
     {
+      "references": [
+        {
+          "source": "Fortinet PSIRT",
+          "url": "https://www.fortiguard.com/psirt/FG-IR-26-175",
+          "published": "2026-10-01T07:00:00+00:00"
+        },
+        {
+          "source": "Fortinet PSIRT",
+          "url": "https://fortiguard.fortinet.com/psirt/cvrf/FG-IR-26-175",
+          "published": "2026-10-01T07:00:00+00:00"
+        },
+        {
+          "source": "CISA KEV official catalog mirror",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
       "id": "s3",
       "title": "Improper limitation of a pathname to a restricted directory",
       "source": "Fortinet PSIRT",
@@ -114,6 +162,240 @@
         {
           "id": "s3.kev",
           "text": "CISA KEV matched CVEs: CVE-2026-104286",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "The Hacker News",
+          "url": "https://thehackernews.com/2026/10/flax-typhoon-exploits-five-flaws-as.html",
+          "published": "2026-10-09T12:21:51+00:00"
+        },
+        {
+          "source": "CISA KEV official catalog mirror",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "id": "s4",
+      "title": "Flax Typhoon Exploits Five Flaws as CISA Sets October 11 Deadline for Federal Agencies",
+      "source": "The Hacker News",
+      "published": "2026-10-09T12:21:51+00:00",
+      "url": "https://thehackernews.com/2026/10/flax-typhoon-exploits-five-flaws-as.html",
+      "evidence": [
+        {
+          "id": "s4.summary",
+          "text": "The U.S. Cybersecurity and Infrastructure Security Agency (CISA) on Thursday added five security flaws to its Known Exploited Vulnerabilities (KEV) catalog, following their abuse by a China-linked threat actor known as Flax Typhoon. The vulnerabilities in question are listed below - CVE-2015-3306 (CVSS score: 10.0) - An improper access control vulnerability in ProFTPD that could allow",
+          "truncated": false
+        },
+        {
+          "id": "s4.kev",
+          "text": "CISA KEV matched CVEs: CVE-2015-3306",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "Cisco Security Advisories",
+          "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU?vs_f=Cisco%20Security%20Advisory%26vs_cat=Security%20Intelligence%26vs_type=RSS%26vs_p=Cisco%20Nexus%203000%20and%209000%20Series%20Switches%20NGOAM%20Remote%20Code%20Execution%20Vulnerabilities%26vs_k=1",
+          "published": "2026-10-07T16:00:00+00:00"
+        }
+      ],
+      "id": "s5",
+      "title": "Cisco Nexus 3000 and 9000 Series Switches NGOAM Remote Code Execution Vulnerabilities",
+      "source": "Cisco Security Advisories",
+      "published": "2026-10-07T16:00:00+00:00",
+      "url": "https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-ngoam-rce-LWKQ4BU?vs_f=Cisco%20Security%20Advisory%26vs_cat=Security%20Intelligence%26vs_type=RSS%26vs_p=Cisco%20Nexus%203000%20and%209000%20Series%20Switches%20NGOAM%20Remote%20Code%20Execution%20Vulnerabilities%26vs_k=1",
+      "evidence": [
+        {
+          "id": "s5.summary",
+          "text": "Multiple vulnerabilities in the Operation, Administration, and Maintenance (OAM) feature of Cisco NX-OS Software, known as Next Generation OAM (NGOAM), could allow an unauthenticated, remote attacker to execute arbitrary code with root privileges or cause a denial of service (DoS) condition on an affected device. A successful exploit could allow the attacker to execute arbitrary code with root privileges and",
+          "truncated": true
+        },
+        {
+          "id": "s5.affected",
+          "text": "These vulnerabilities affect Cisco Nexus 3000 Series Switches and Cisco Nexus 9000 Series Switches in standalone NX-OS mode if NGOAM is enabled and specific features are configured, as detailed in the following list: CVE-2026-76485: To be affected by this vulnerability, the switch must have NGOAM enabled. That is the only requirement. CVE-2026-76486: To be affected",
+          "truncated": true
+        },
+        {
+          "id": "s5.remediation",
+          "text": "Cisco considers any workarounds and mitigations (if applicable) to be temporary solutions until an upgrade to a fixed software release is available. To remediate these vulnerabilities and avoid future exposure as described in this advisory, Cisco strongly recommends that customers upgrade to the fixed software indicated in this advisory. Cisco NX-OS Software To help customers determine their exposure to vulnerabilities in Cisco NX-OS Software, Cisco provides the Cisco Software Checker . This tool identifies any Cisco security advisories that impact a specific software release and",
+          "truncated": true
+        },
+        {
+          "id": "s5.workarounds",
+          "text": "There are no workarounds that address these vulnerabilities. If the NGOAM feature is not required, disabling it removes the attack vector and is a mitigation for all three vulnerabilities. Disable the NGOAM by using the Cisco NX-OS CLI command no feature ngoam in global configuration",
+          "truncated": true
+        },
+        {
+          "id": "s5.exploitation",
+          "text": "The Cisco Product Security Incident Response Team (PSIRT) is not aware of any public announcements or malicious use of the vulnerabilities that are described in this advisory.",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "Microsoft MSRC",
+          "url": "https://api.msrc.microsoft.com/cvrf/v3.0/cvrf/2026-Sep",
+          "published": "2026-10-09T14:00:00+00:00"
+        },
+        {
+          "source": "Microsoft MSRC",
+          "url": "https://msrc.microsoft.com/update-guide/vulnerability/CVE-2026-62744",
+          "published": "2026-10-09T14:00:00+00:00"
+        }
+      ],
+      "id": "s6",
+      "title": "CVE-2026-62744 Microsoft Windows Media Foundation Remote Code Execution Vulnerability",
+      "source": "Microsoft MSRC",
+      "published": "2026-10-09T14:00:00+00:00",
+      "url": "https://api.msrc.microsoft.com/cvrf/v3.0/cvrf/2026-Sep",
+      "evidence": [
+        {
+          "id": "s6.summary",
+          "text": "Heap-based buffer overflow in Microsoft Windows Media Foundation allows an unauthorized attacker to execute code over a network.",
+          "truncated": false
+        },
+        {
+          "id": "s6.affected",
+          "text": "Windows Server 2025 (Server Core installation) | Windows 11 Version 25H2 for ARM64-based Systems | Windows 11 Version 25H2 for x64-based Systems | Windows 11 Version 24H2 for ARM64-based Systems | Windows 11 Version 24H2 for x64-based Systems | Windows Server 2025 | Windows 11 version 26H1 for x64-based Systems | Windows 11 Version 26H1",
+          "truncated": true
+        },
+        {
+          "id": "s6.remediation",
+          "text": "5122871 | Fixed build: 10.0.26100.33438 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5122871 | Products: Windows Server 2025 (Server Core installation), Windows Server 2025 | 5124008 | Fixed build: 10.0.26200.9445 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5124008 | Products: Windows 11 Version 25H2 for ARM64-based Systems, Windows 11 Version 25H2 for x64-based Systems | 5124008 | Fixed build: 10.0.26100.9445 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5124008 | Products: Windows 11 Version 24H2 for ARM64-based Systems, Windows 11 Version 24H2 for x64-based Systems | 5124012 | Fixed build: 10.0.28000.2954 | https://catalog.update.microsoft.com/v7/site/Search.aspx?q=KB5124012 | Products: Windows 11 version 26H1 for x64-based Systems, Windows 11",
+          "truncated": true
+        },
+        {
+          "id": "s6.exploitation",
+          "text": "Publicly Disclosed:No;Exploited:No;Latest Software Release:Exploitation Unlikely",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "Cisco Talos",
+          "url": "https://blog.talosintelligence.com/making-sure-the-checks-get-printed/",
+          "published": "2026-10-08T18:00:29+00:00"
+        },
+        {
+          "source": "CISA KEV official catalog mirror",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "id": "s7",
+      "title": "Making sure the checks get printed",
+      "source": "Cisco Talos",
+      "published": "2026-10-08T18:00:29+00:00",
+      "url": "https://blog.talosintelligence.com/making-sure-the-checks-get-printed/",
+      "evidence": [
+        {
+          "id": "s7.summary",
+          "text": "My name is Pierre Cadieux, and I\u2019ll be helping contribute to these newsletters. A little about me: I\u2019ve been working in the cybersecurity industry in many roles over the past 20+ years, first focusing on endpoint security, policies, and firewalls, then moving to risk management and compliance, disaster recovery, and investigations. I spent about 15 years as a consultant working",
+          "truncated": true
+        },
+        {
+          "id": "s7.kev",
+          "text": "CISA KEV matched CVEs: CVE-2026-88779",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "BleepingComputer",
+          "url": "https://www.bleepingcomputer.com/news/security/max-severity-sonicwall-sma1000-flaw-now-exploited-in-attacks/",
+          "published": "2026-10-09T12:32:16+00:00"
+        },
+        {
+          "source": "CISA KEV official catalog mirror",
+          "url": "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json"
+        }
+      ],
+      "id": "s8",
+      "title": "Max severity SonicWall SMA1000 flaw now exploited in attacks",
+      "source": "BleepingComputer",
+      "published": "2026-10-09T12:32:16+00:00",
+      "url": "https://www.bleepingcomputer.com/news/security/max-severity-sonicwall-sma1000-flaw-now-exploited-in-attacks/",
+      "evidence": [
+        {
+          "id": "s8.summary",
+          "text": "Attackers are exploiting a maximum-severity vulnerability in SonicWall SMA1000 appliances (CVE-2026-102255) that was patched on Tuesday, three days ago.",
+          "truncated": false
+        },
+        {
+          "id": "s8.affected",
+          "text": "Tracked as CVE-2026-102255 , the flaw affects the Appliance WorkPlace interface on SMA1000 6210, 7210, and 8200v models, but does not affect the SMA 100 Series product line or SSL-VPN running on SonicWall firewalls.",
+          "truncated": false
+        },
+        {
+          "id": "s8.exploitation",
+          "text": "While SonicWall has not yet flagged this vulnerability as actively exploited in its Tuesday advisory, Previdian founder and security researcher Ryan Dewhurst told BleepingComputer on Friday that the company's honeypot network has detected exploitation attempts consistent with the CVE-2026-102255 flaw.",
+          "truncated": false
+        },
+        {
+          "id": "s8.kev",
+          "text": "CISA KEV matched CVEs: CVE-2026-15409, CVE-2026-15410, CVE-2026-83548, CVE-2026-83549",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "The Record",
+          "url": "https://therecord.media/japan-germany-ransomware-arrest",
+          "published": "2026-10-09T18:45:00+00:00"
+        }
+      ],
+      "id": "s9",
+      "title": "Japan confirms arrest of Russian Qilin operative, extradition to Germany",
+      "source": "The Record",
+      "published": "2026-10-09T18:45:00+00:00",
+      "url": "https://therecord.media/japan-germany-ransomware-arrest",
+      "evidence": [
+        {
+          "id": "s9.summary",
+          "text": "Japan\u2019s National Police Agency confirmed on Thursday the arrest and extradition of a Russian national accused of being involved in the Qilin ransomware gang.",
+          "truncated": false
+        }
+      ]
+    },
+    {
+      "references": [
+        {
+          "source": "Canadian Centre for Cyber Security",
+          "url": "https://www.cyber.gc.ca/en/alerts-advisories/smartertools-security-advisory-av26-1026",
+          "published": "2026-10-09T19:25:04+00:00"
+        },
+        {
+          "source": "Canadian Centre for Cyber Security",
+          "url": "https://cyber.gc.ca/en/alerts-advisories/smartertools-security-advisory-av26-1026",
+          "published": "2026-10-09T19:25:04+00:00"
+        }
+      ],
+      "id": "s10",
+      "title": "SmarterTools security advisory (AV26-1026)",
+      "source": "Canadian Centre for Cyber Security",
+      "published": "2026-10-09T19:25:04+00:00",
+      "url": "https://www.cyber.gc.ca/en/alerts-advisories/smartertools-security-advisory-av26-1026",
+      "evidence": [
+        {
+          "id": "s10.summary",
+          "text": "The Cyber Centre encourages users and administrators to review the provided web links and apply any necessary updates as they become available.",
+          "truncated": false
+        },
+        {
+          "id": "s10.affected",
+          "text": "As of October 8, 2026, SmarterTools is affected by a vulnerability in the following product:",
           "truncated": false
         }
       ]

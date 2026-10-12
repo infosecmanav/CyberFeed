@@ -22,14 +22,20 @@ def pack(report):
             if text:
                 if field == 'summary':
                     sentences = re.split(r'(?<=[.!?])\s+', text)
-                    focused = [sentence for sentence in sentences if re.search(r'may allow|could allow|successful exploitation|actively exploited|exploited in the wild', sentence, re.I)]
+                    focused = [sentence for sentence in sentences if sentence.endswith(('.', '!', '?')) and re.search(r'may allow|could allow|successful exploitation|actively exploited|exploited in the wild', sentence, re.I)]
                     if focused:
                         text = ' '.join(focused)
                 words = text.split()
                 evidence.append({'id': ident+'.'+field, 'text': ' '.join(words[:budget]), 'truncated': len(words)>budget or fields.get(field, {}).get('truncated', False)})
         if source.get('known_exploited_cves'):
             evidence.append({'id': ident+'.kev', 'text': 'CISA KEV matched CVEs: '+', '.join(source['known_exploited_cves']), 'truncated': False})
-        stories.append({'id': ident, 'title': source['title'], 'source': source['source'], 'published': source['published'], 'url': source.get('details', {}).get('url',source['url']), 'evidence': evidence})
+        references = []
+        for label,url in [(source['source'],source.get('details',{}).get('url',source['url'])),(source['source'],source['url'])]+[(e.get('source','Supporting source'),e['url']) for e in source.get('evidence',[]) if e.get('url')]:
+            if url not in [r['url'] for r in references]:
+                references.append({'source':label,'url':url,'published':source['published'] if url in (source['url'],source.get('details',{}).get('url')) else None})
+        if source.get('known_exploited_cves'):
+            references.append({'source':'CISA KEV official catalog mirror','url':'https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.json'})
+        stories.append({'references': references, 'id': ident, 'title': source['title'], 'source': source['source'], 'published': source['published'], 'url': source.get('details', {}).get('url',source['url']), 'evidence': evidence})
     return {'period': report['period'], 'generated': report['generated'], 'demo': report.get('demo',False), 'window_start':report.get('window_start'), 'window_end':report.get('window_end'), 'errors':report['errors'], 'stories': stories}
 
 
@@ -43,8 +49,8 @@ def validate(payload, summary):
         if not isinstance(title,str) or not title.strip() or len(title)>140:
             raise ValueError('Title must be nonempty and at most 140 characters')
         bullets = story.get('bullets')
-        if not isinstance(bullets,list) or not 3<=len(bullets)<=5:
-            raise ValueError('Each story requires 3–5 bullets')
+        if not isinstance(bullets,list) or not 1<=len(bullets)<=5:
+            raise ValueError('Each story requires 1–5 supported bullets')
         evidence = {e['id']:e['text'] for e in source['evidence']}
         for bullet in bullets:
             if bullet.get('kind') not in ('what','why','affected','action','exploitation'):
@@ -65,27 +71,64 @@ def validate(payload, summary):
             raise ValueError('Editorial entries require text and exact quotations')
         if item.get('evidence_id') not in evidence or quote not in evidence[item['evidence_id']]:
             raise ValueError('Editorial citation or quotation does not match input')
-    sources = {source['id']: source for source in payload['stories']}
-    overview = summary.get('overview')
-    if not isinstance(overview, list) or not 1 <= len(overview) <= 5:
-        raise ValueError('AI summary requires 1–5 overview bullets')
-    for item in overview:
-        if item.get('story_id') not in sources:
-            raise ValueError('Overview must reference a supplied story')
-        cited(item, {e['id']: e['text'] for e in sources[item['story_id']]['evidence']})
-        if len(item['text'].split()) > 40:
-            raise ValueError('Overview bullet exceeds 40 words')
     for source, story in zip(payload['stories'], summary['stories']):
         details = story.get('details')
-        if not isinstance(details, list) or not 3 <= len(details) <= 6:
-            raise ValueError('Detailed report requires 3–6 supported entries per story')
+        if not isinstance(details, list) or not 1 <= len(details) <= 6:
+            raise ValueError('Detailed report requires 1–6 supported entries per story')
         for item in details:
             if item.get('section') not in ('context', 'affected', 'action', 'exploitation'):
                 raise ValueError('Invalid detailed report section')
             cited(item, {e['id']: e['text'] for e in source['evidence']})
         if len(' '.join(item['text'] for item in details).split()) > 220:
             raise ValueError('Detailed report exceeds 220 words per story')
+        diagram = story.get('diagram')
+        if diagram is not None:
+            if not isinstance(diagram, dict) or not isinstance(diagram.get('nodes'), list) or not 2 <= len(diagram['nodes']) <= 6:
+                raise ValueError('Optional diagram requires 2–6 supported nodes')
+            node_ids = [node.get('id') for node in diagram['nodes']]
+            if any(not isinstance(n, str) or not n for n in node_ids) or len(set(node_ids)) != len(node_ids):
+                raise ValueError('Diagram node IDs must be nonempty and unique')
+            evidence = {e['id']: e['text'] for e in source['evidence']}
+            for node in diagram['nodes']:
+                cited(node, evidence)
+                if len(node['text'].split()) > 18:
+                    raise ValueError('Diagram label exceeds 18 words')
+            edges = diagram.get('edges')
+            if not isinstance(edges, list) or not 1 <= len(edges) <= 8:
+                raise ValueError('Diagram requires explicit supported relationships')
+            for edge in edges:
+                if edge.get('from') not in node_ids or edge.get('to') not in node_ids or edge['from'] == edge['to']:
+                    raise ValueError('Diagram edge references invalid nodes')
+                quote = edge.get('quote')
+                if not isinstance(quote, str) or not quote or edge.get('evidence_id') not in evidence or quote not in evidence[edge['evidence_id']]:
+                    raise ValueError('Diagram relationship requires matching evidence')
     return summary
+
+
+def diagram_drawing(diagram, width, accent, ink, background):
+    from reportlab.graphics.shapes import Drawing, Rect, String, Line, Polygon
+    from reportlab.lib.utils import simpleSplit
+    nodes=diagram['nodes'];height=len(nodes)*68
+    drawing=Drawing(width,height)
+    positions={node['id']:(width/2,height-52-index*68) for index,node in enumerate(nodes)}
+    for edge in diagram['edges']:
+        x,y=positions[edge['from']];tx,ty=positions[edge['to']]
+        if ty<y:
+            drawing.add(Line(x,y,tx,ty+40,strokeColor=accent,strokeWidth=1.2))
+            drawing.add(Polygon([tx,ty+40,tx-4,ty+47,tx+4,ty+47],fillColor=accent,strokeColor=accent))
+        else:
+            # Route reverse/non-sequential relationships at the side.
+            side=width-8
+            drawing.add(Line(x+width/2-32,y+20,side,y+20,strokeColor=accent))
+            drawing.add(Line(side,y+20,side,ty+20,strokeColor=accent))
+            drawing.add(Line(side,ty+20,tx+width/2-32,ty+20,strokeColor=accent))
+            drawing.add(Polygon([width-32,ty+20,width-25,ty+24,width-25,ty+16],fillColor=accent,strokeColor=accent))
+    for node in nodes:
+        x,y=positions[node['id']]
+        drawing.add(Rect(32,y,width-64,40,rx=5,fillColor=background,strokeColor=accent,strokeWidth=.8))
+        lines=simpleSplit(node['text'],'SignalPreview',8.5,width-86)
+        for index,line in enumerate(lines[:2]):drawing.add(String(x,y+24-index*11,line,fontName='SignalPreview',fontSize=8.5,fillColor=ink,textAnchor='middle'))
+    return drawing
 
 
 def render(payload, summary, theme='dark'):
@@ -95,7 +138,7 @@ def render(payload, summary, theme='dark'):
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether, PageBreak
     import reportlab
     font=Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
     if not font.exists():font=Path(reportlab.__file__).parent/'fonts'/'Vera.ttf'
@@ -103,32 +146,43 @@ def render(payload, summary, theme='dark'):
     dark=theme=='dark';background=colors.HexColor('#070b12' if dark else '#ffffff');card=colors.HexColor('#101c2d' if dark else '#f1f5f9');ink=colors.HexColor('#eef4fa' if dark else '#152337');muted=colors.HexColor('#abb9ca' if dark else '#536579');accent=colors.HexColor('#60a5fa' if dark else '#1d4ed8')
     def style(name,size=9,color=ink,leading=13):return ParagraphStyle(name,fontName='SignalPreview',fontSize=size,textColor=color,leading=leading,spaceAfter=6)
     body=style('body');heading=style('heading',13,ink,17);meta=style('meta',8,muted,12);title=style('title',28,ink,34)
+    heading.keepWithNext = True
     out=BytesIO();doc=SimpleDocTemplate(out,leftMargin=36,rightMargin=36,topMargin=42,bottomMargin=42)
     flow=[Paragraph('SIGNAL / CYBER BRIEFING',meta),Paragraph('Less noise. Clear next steps.',title),Paragraph('DESIGN PREVIEW · Agent-edited sample; automated AI delivery is not connected.',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
     if payload.get('demo'):flow.append(Paragraph('FICTIONAL DEMO — not real incidents.',body))
-    flow.append(Paragraph('01 / AI summary', heading))
-    source_numbers = {source['id']: index for index, source in enumerate(payload['stories'], 1)}
-    for item in summary['overview']:
-        flow.append(Paragraph('• '+escape(item['text'])+f" [{source_numbers[item['story_id']]}]",body))
-    flow.extend([Spacer(1,16),Paragraph('02 / Detailed AI-edited report',heading)])
     labels={'context':'WHAT HAPPENED / IMPACT','affected':'AFFECTED PRODUCTS & VERSIONS','action':'PATCHES & RECOMMENDED ACTION','exploitation':'EXPLOITATION STATUS'}
     for index,(source,story) in enumerate(zip(payload['stories'],summary['stories']),1):
-        content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10])+f' · Reference [{index}]',meta)]
+        if index > 1:
+            flow.append(PageBreak())
+        content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10]),meta),Paragraph('a. AI summary',heading)]
+        references = source.get('references') or [{'source':source['source'],'url':source['url']}]
+        def citation(item):
+            ref = next((i for i,r in enumerate(references,1) if 'KEV' in r['source']),1) if item['evidence_id'].endswith('.kev') else 1
+            return f' [{index}.{ref}]'
+        for bullet in story['bullets']:
+            content.append(Paragraph('• '+escape(bullet['text'])+citation(bullet),body))
+        content.append(Paragraph('b. Detailed AI-powered report',heading))
         last_section = None
         for item in story['details']:
             label = f'<font color="{accent.hexval()}">{labels[item["section"]]}</font><br/>' if item['section'] != last_section else ''
-            content.append(Paragraph(label+escape(item['text'])+f' [{index}]',body))
+            content.append(Paragraph(label+escape(item['text'])+citation(item),body))
             last_section = item['section']
         if story.get('missing'):content.append(Paragraph('Not supplied: '+escape(', '.join(story['missing']))+'. Check the complete source before acting.',meta))
-        cell=Table([[content]],colWidths=[doc.width]);cell.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),card),('LEFTPADDING',(0,0),(-1,-1),16),('RIGHTPADDING',(0,0),(-1,-1),16),('TOPPADDING',(0,0),(-1,-1),14),('BOTTOMPADDING',(0,0),(-1,-1),10)]))
-        flow.extend([KeepTogether([cell]),Spacer(1,14)])
-    flow.extend([Spacer(1,10),Paragraph('03 / References',heading)])
-    from urllib.parse import urlparse
-    for index,source in enumerate(payload['stories'],1):
-        flow.append(Paragraph(f"[{index}] {escape(source['source'])} · {escape(source['published'][:10])}<br/>{escape(source['title'])}",body))
-        url=source['url']
-        if urlparse(url).scheme=='https':
-            flow.append(Paragraph(f'<link href={quoteattr(url)} color="{accent.hexval()}">{escape(url)}</link>',meta))
+        if story.get('diagram'):
+            content.append(Paragraph('Source-backed diagram (optional)',heading))
+            content.append(diagram_drawing(story['diagram'],doc.width,accent,ink,card))
+        content.append(Paragraph('c. References',heading))
+        from urllib.parse import urlparse
+        for number,reference in enumerate(references,1):
+            url=reference['url']
+            content.append(Paragraph(f"[{index}.{number}] {escape(reference['source'])} · {escape(reference['published'][:10] if reference.get('published') else 'Publication date not supplied')}",meta))
+            if urlparse(url).scheme=='https':
+                content.append(Paragraph(f'<link href={quoteattr(url)} color="{accent.hexval()}">{escape(url)}</link>',meta))
+        # Keep each entry's summary/detail/references together in document order.
+        # Individual paragraphs can paginate; long reports must not overflow.
+        for paragraph in content:
+            flow.append(paragraph)
+        flow.append(Spacer(1,20))
     if payload['errors']:
         flow.append(Paragraph('Coverage gaps',heading))
         for error in payload['errors']:flow.append(Paragraph(escape(error['source']+': '+error['error']),body))
