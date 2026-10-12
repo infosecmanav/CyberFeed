@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 site/
 .pytest_cache/
+.state/
