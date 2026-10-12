@@ -6,7 +6,7 @@ from .engine import ROOT
 
 
 def connection():
-    directory = Path(os.getenv('CYBERBRIEF_STATE_DIR', str(ROOT / '.state')))
+    directory = Path(os.getenv('CYBERBRIEF_STATE_DIR') or str(ROOT / '.state'))
     directory.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(directory / 'preferences.sqlite3')
     db.execute('CREATE TABLE IF NOT EXISTS preferences (user_id TEXT PRIMARY KEY, format TEXT NOT NULL)')
