@@ -1,6 +1,6 @@
 # Editorial design preview
 
-These three historical source-backed stories demonstrate a proposed layout. Summaries were prepared during this review, without calling an external AI API. They are not a newly fetched daily report. Production PDF rendering and scheduled delivery have not changed.
+These three historical source-backed stories demonstrate the approved black-and-blue direction: AI summary, detailed AI-edited report, and numbered references. Summaries were prepared during this review, without calling an external AI API. They are not a newly fetched daily report. Production PDF rendering and scheduled delivery have not changed.
 
 - [Dark PDF](dark.pdf)
 - [Light PDF](light.pdf)

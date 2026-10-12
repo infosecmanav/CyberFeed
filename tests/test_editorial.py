@@ -40,4 +40,16 @@ def test_preview_pdf_preserves_summary_links_and_missing_fields(theme):
     assert 'DESIGN PREVIEW' in text and 'Not supplied: versions' in text
     assert 'FortiMail' in text and 'Lantronix' in text and 'Citrix' in text
     assert any(page.get('/Annots') for page in reader.pages)
-    assert len(reader.pages)<=3
+    assert len(reader.pages)<=4
+    assert text.index('AI summary') < text.index('Detailed AI-edited report') < text.index('03 / References')
+    assert '[1]' in text and 'https://' in text
+
+
+def test_overview_and_detailed_citations_are_checked_separately():
+    p,s=sample()
+    bad=copy.deepcopy(s);bad['overview'][0]['story_id']='unknown'
+    with pytest.raises(ValueError,match='supplied story'):validate(p,bad)
+    bad=copy.deepcopy(s);bad['stories'][0]['details'][0]['quote']='Invented detail evidence'
+    with pytest.raises(ValueError,match='quotation'):validate(p,bad)
+    bad=copy.deepcopy(s);bad['stories'][0]['details'][0]['text']='word '*230
+    with pytest.raises(ValueError,match='220 words'):validate(p,bad)

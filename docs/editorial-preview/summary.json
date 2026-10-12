@@ -31,6 +31,32 @@
       ],
       "missing": [
         "versions"
+      ],
+      "details": [
+        {
+          "section": "context",
+          "text": "The Canadian Cyber Centre warns of critical vulnerabilities affecting NetScaler ADC and NetScaler Gateway.",
+          "evidence_id": "s1.affected",
+          "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances."
+        },
+        {
+          "section": "context",
+          "text": "The advisory describes a possible route to remote code execution without authentication. An attacker could execute arbitrary code on a vulnerable NetScaler appliance. This is a capability described by the source; it does not establish that every deployment has been compromised.",
+          "evidence_id": "s1.summary",
+          "quote": "The vulnerability may allow a remote, unauthenticated attacker to execute arbitrary code on a vulnerable NetScaler appliance."
+        },
+        {
+          "section": "action",
+          "text": "Where feasible, preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances. The report does not supply exact fixed versions, so consult the original advisory for the applicable release guidance.",
+          "evidence_id": "s1.remediation",
+          "quote": "Preserve forensic evidence before shutting down, rebooting, patching, rebuilding, or otherwise modifying affected appliances, where feasible."
+        },
+        {
+          "section": "exploitation",
+          "text": "CISA KEV lists CVE-2026-88771 and CVE-2026-88772. That signal applies to those CVEs, not every related issue.",
+          "evidence_id": "s1.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2026-88771, CVE-2026-88772"
+        }
       ]
     },
     {
@@ -62,7 +88,33 @@
           "quote": "CISA KEV matched CVEs: CVE-2025-67038"
         }
       ],
-      "missing": []
+      "missing": [],
+      "details": [
+        {
+          "section": "context",
+          "text": "CISA describes vulnerabilities that could permit authentication bypass and code execution with root-level privileges if successfully exploited. Treat this as the stated technical impact, not proof that a particular device was compromised.",
+          "evidence_id": "s2.summary",
+          "quote": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges."
+        },
+        {
+          "section": "affected",
+          "text": "The supplied affected-product list includes EDS5000 releases through 2.1.0.0R3. This boundary is specific to EDS5000; do not apply it to other Lantronix families. The source contains the complete product and version list.",
+          "evidence_id": "s2.affected",
+          "quote": "Lantronix EDS5000 series: <=2.1.0.0R3"
+        },
+        {
+          "section": "action",
+          "text": "For the EDS5000 series, the stated fix is version 2.2.0.0R1 or later. Match the actual device family and release to the source guidance rather than treating that version as a universal Lantronix fix.",
+          "evidence_id": "s2.remediation",
+          "quote": "EDS5000 series: Upgrade to version 2.2.0.0R1 or later."
+        },
+        {
+          "section": "exploitation",
+          "text": "CISA KEV lists CVE-2025-67038. Do not interpret that as exploitation of every vulnerability in this advisory.",
+          "evidence_id": "s2.kev",
+          "quote": "CISA KEV matched CVEs: CVE-2025-67038"
+        }
+      ]
     },
     {
       "id": "s3",
@@ -93,7 +145,53 @@
           "quote": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' )"
         }
       ],
-      "missing": []
+      "missing": [],
+      "details": [
+        {
+          "section": "context",
+          "text": "The vendor describes a vulnerability that may permit an unauthenticated attacker to write arbitrary files using crafted HTTP or HTTPS requests. The explanation here preserves that conditional language rather than claiming that every deployment has been attacked.",
+          "evidence_id": "s3.summary",
+          "quote": "may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests."
+        },
+        {
+          "section": "exploitation",
+          "text": "Fortinet reports exploitation in the wild.",
+          "evidence_id": "s3.exploitation",
+          "quote": "This has been reported to be exploited in the wild, customers are urged to apply the workaround below."
+        },
+        {
+          "section": "action",
+          "text": "For FortiMail 8.0, the cited table identifies 8.0.0 through 8.0.1 as affected and lists 8.0.2 or above as the upgrade target. This is one branch-specific example; use the complete vendor table for a different branch.",
+          "evidence_id": "s3.remediation",
+          "quote": "FortiMail 8.0 8.0.0 through 8.0.1 Upgrade to 8.0.2 or above"
+        },
+        {
+          "section": "action",
+          "text": "The listed workaround is to disable IBE feature support in the GUI. Consult the vendor guidance before changing configuration.",
+          "evidence_id": "s3.workarounds",
+          "quote": "Disable the IBE feature support via the GUI ( Encryption -> IBE -> IBE Service 'off' )"
+        }
+      ]
+    }
+  ],
+  "overview": [
+    {
+      "story_id": "s1",
+      "text": "The Canadian Cyber Centre warns of critical vulnerabilities affecting NetScaler ADC and NetScaler Gateway.",
+      "evidence_id": "s1.affected",
+      "quote": "The Canadian Centre for Cyber Security (Cyber Centre) is aware of critical vulnerabilities affecting Citrix NetScaler ADC and NetScaler Gateway appliances."
+    },
+    {
+      "story_id": "s2",
+      "text": "CISA warns that successful exploitation could bypass authentication and run code with root-level privileges.",
+      "evidence_id": "s2.summary",
+      "quote": "Successful exploitation of these vulnerabilities could allow an attacker to bypass authentication and execute code with root-level privileges."
+    },
+    {
+      "story_id": "s3",
+      "text": "An unauthenticated attacker could write arbitrary files through crafted HTTP or HTTPS requests.",
+      "evidence_id": "s3.summary",
+      "quote": "may allow an unauthenticated attacker to write arbitrary files on the underlying system via crafted HTTP or HTTPS requests."
     }
   ]
 }

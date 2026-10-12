@@ -59,6 +59,32 @@ def validate(payload, summary):
         missing = story.get('missing',[])
         if not isinstance(missing,list) or any(m not in ('versions','remediation','exploitation','workaround') for m in missing):
             raise ValueError('Invalid missing-field list')
+    def cited(item, evidence):
+        text, quote = item.get('text'), item.get('quote')
+        if not isinstance(text, str) or not text.strip() or not isinstance(quote, str) or not quote.strip():
+            raise ValueError('Editorial entries require text and exact quotations')
+        if item.get('evidence_id') not in evidence or quote not in evidence[item['evidence_id']]:
+            raise ValueError('Editorial citation or quotation does not match input')
+    sources = {source['id']: source for source in payload['stories']}
+    overview = summary.get('overview')
+    if not isinstance(overview, list) or not 1 <= len(overview) <= 5:
+        raise ValueError('AI summary requires 1–5 overview bullets')
+    for item in overview:
+        if item.get('story_id') not in sources:
+            raise ValueError('Overview must reference a supplied story')
+        cited(item, {e['id']: e['text'] for e in sources[item['story_id']]['evidence']})
+        if len(item['text'].split()) > 40:
+            raise ValueError('Overview bullet exceeds 40 words')
+    for source, story in zip(payload['stories'], summary['stories']):
+        details = story.get('details')
+        if not isinstance(details, list) or not 3 <= len(details) <= 6:
+            raise ValueError('Detailed report requires 3–6 supported entries per story')
+        for item in details:
+            if item.get('section') not in ('context', 'affected', 'action', 'exploitation'):
+                raise ValueError('Invalid detailed report section')
+            cited(item, {e['id']: e['text'] for e in source['evidence']})
+        if len(' '.join(item['text'] for item in details).split()) > 220:
+            raise ValueError('Detailed report exceeds 220 words per story')
     return summary
 
 
@@ -67,7 +93,6 @@ def render(payload, summary, theme='dark'):
     if theme not in ('dark','light'): raise ValueError('Choose dark or light')
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_LEFT
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, KeepTogether
@@ -75,23 +100,35 @@ def render(payload, summary, theme='dark'):
     font=Path('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf')
     if not font.exists():font=Path(reportlab.__file__).parent/'fonts'/'Vera.ttf'
     if 'SignalPreview' not in pdfmetrics.getRegisteredFontNames():pdfmetrics.registerFont(TTFont('SignalPreview',str(font)))
-    dark=theme=='dark';background=colors.HexColor('#10151d' if dark else '#ffffff');card=colors.HexColor('#1b2531' if dark else '#f1f5f9');ink=colors.HexColor('#eef4fa' if dark else '#152337');muted=colors.HexColor('#abb9ca' if dark else '#536579');accent=colors.HexColor('#65e0c2' if dark else '#096a80')
+    dark=theme=='dark';background=colors.HexColor('#070b12' if dark else '#ffffff');card=colors.HexColor('#101c2d' if dark else '#f1f5f9');ink=colors.HexColor('#eef4fa' if dark else '#152337');muted=colors.HexColor('#abb9ca' if dark else '#536579');accent=colors.HexColor('#60a5fa' if dark else '#1d4ed8')
     def style(name,size=9,color=ink,leading=13):return ParagraphStyle(name,fontName='SignalPreview',fontSize=size,textColor=color,leading=leading,spaceAfter=6)
     body=style('body');heading=style('heading',13,ink,17);meta=style('meta',8,muted,12);title=style('title',28,ink,34)
     out=BytesIO();doc=SimpleDocTemplate(out,leftMargin=36,rightMargin=36,topMargin=42,bottomMargin=42)
-    flow=[Paragraph('SIGNAL / CYBER BRIEFING',meta),Paragraph('Less noise. Clear next steps.',title),Paragraph('DESIGN PREVIEW · Editorial sample; scheduled reports are unchanged.',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
+    flow=[Paragraph('SIGNAL / CYBER BRIEFING',meta),Paragraph('Less noise. Clear next steps.',title),Paragraph('DESIGN PREVIEW · Agent-edited sample; automated AI delivery is not connected.',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
     if payload.get('demo'):flow.append(Paragraph('FICTIONAL DEMO — not real incidents.',body))
-    labels={'what':'WHAT CHANGED','why':'WHY IT MATTERS','affected':'WHO IS AFFECTED','action':'WHAT TO DO','exploitation':'EXPLOITATION'}
+    flow.append(Paragraph('01 / AI summary', heading))
+    source_numbers = {source['id']: index for index, source in enumerate(payload['stories'], 1)}
+    for item in summary['overview']:
+        flow.append(Paragraph('• '+escape(item['text'])+f" [{source_numbers[item['story_id']]}]",body))
+    flow.extend([Spacer(1,16),Paragraph('02 / Detailed AI-edited report',heading)])
+    labels={'context':'WHAT HAPPENED / IMPACT','affected':'AFFECTED PRODUCTS & VERSIONS','action':'PATCHES & RECOMMENDED ACTION','exploitation':'EXPLOITATION STATUS'}
     for index,(source,story) in enumerate(zip(payload['stories'],summary['stories']),1):
-        content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10]),meta)]
-        for b in story['bullets']:
-            content.append(Paragraph(f'<font color="{accent.hexval()}">{labels[b["kind"]]}</font><br/>{escape(b["text"])}',body))
+        content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10])+f' · Reference [{index}]',meta)]
+        last_section = None
+        for item in story['details']:
+            label = f'<font color="{accent.hexval()}">{labels[item["section"]]}</font><br/>' if item['section'] != last_section else ''
+            content.append(Paragraph(label+escape(item['text'])+f' [{index}]',body))
+            last_section = item['section']
         if story.get('missing'):content.append(Paragraph('Not supplied: '+escape(', '.join(story['missing']))+'. Check the complete source before acting.',meta))
-        from urllib.parse import urlparse
-        url=source['url']
-        if urlparse(url).scheme=='https':content.append(Paragraph(f'<link href={quoteattr(url)} color="{accent.hexval()}">Read original source ↗</link>',body))
         cell=Table([[content]],colWidths=[doc.width]);cell.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,-1),card),('LEFTPADDING',(0,0),(-1,-1),16),('RIGHTPADDING',(0,0),(-1,-1),16),('TOPPADDING',(0,0),(-1,-1),14),('BOTTOMPADDING',(0,0),(-1,-1),10)]))
         flow.extend([KeepTogether([cell]),Spacer(1,14)])
+    flow.extend([Spacer(1,10),Paragraph('03 / References',heading)])
+    from urllib.parse import urlparse
+    for index,source in enumerate(payload['stories'],1):
+        flow.append(Paragraph(f"[{index}] {escape(source['source'])} · {escape(source['published'][:10])}<br/>{escape(source['title'])}",body))
+        url=source['url']
+        if urlparse(url).scheme=='https':
+            flow.append(Paragraph(f'<link href={quoteattr(url)} color="{accent.hexval()}">{escape(url)}</link>',meta))
     if payload['errors']:
         flow.append(Paragraph('Coverage gaps',heading))
         for error in payload['errors']:flow.append(Paragraph(escape(error['source']+': '+error['error']),body))
