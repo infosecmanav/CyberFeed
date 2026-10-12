@@ -15,8 +15,8 @@ jobs:
           python-version: '3.12'
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest -q
-      - run: python -m cyberbrief.cli build --out site
+      - run: python -m cyberbrief.cli build --format all --out site
       - uses: actions/upload-artifact@v4
         with:
-          name: briefing-json
+          name: briefing-reports
           path: site

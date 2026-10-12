@@ -41,6 +41,12 @@ def fetch_feeds(sources, timeout=15):
     stories = []
     errors = []
     for src in sources:
+        if src.get('adapter') == 'cisa_csaf':
+            from .csaf import fetch_cisa_csaf
+            fetched, failures = fetch_cisa_csaf(timeout)
+            stories.extend(fetched)
+            errors.extend(failures)
+            continue
         try:
             request = urllib.request.Request(src["url"], headers={"User-Agent": "CyberBrief/0.1 (+public security research)"})
             with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -65,7 +71,8 @@ def fetch_feeds(sources, timeout=15):
                 if not link.startswith(("https://", "http://")):
                     continue
                 summary = re.sub(r"<[^>]+>", " ", values.get("summary", values.get("description", values.get("content", ""))))
-                summary = " ".join(summary.split())[:1800]
+                import html
+                summary = ' '.join(html.unescape(summary).split())[:1800]
                 try:
                     published = parse_date(values.get("published") or values.get("pubDate") or values.get("updated"))
                 except ValueError:

@@ -14,6 +14,7 @@ class Story:
     kind: str = "reporting"
     cves: list[str] = field(default_factory=list)
     evidence: list[dict[str, Any]] = field(default_factory=list)
+    details: dict[str, Any] = field(default_factory=dict)
     score: float = 0.0
     score_parts: dict[str, float] = field(default_factory=dict)
     confidence: str = "Low"

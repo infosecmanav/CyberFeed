@@ -1,6 +1,7 @@
 sources:
   - name: CISA
-    url: https://www.cisa.gov/cybersecurity-advisories/all.xml
+    url: https://github.com/cisagov/CSAF
+    adapter: cisa_csaf
     tier: 0
     kind: primary
   - name: Canadian Centre for Cyber Security

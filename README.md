@@ -8,9 +8,9 @@ A Discord bot that builds daily or weekly cybersecurity briefings from curated f
 - `/briefing period:daily` uses your saved format. New users default to text.
 - `/briefing period:weekly format:pdf` overrides your preference for this report without changing it.
 
-Reports are ephemeral (visible only to the requesting user). PDFs are generated in memory and uploaded to Discord; the app does not save report files. Text uses Discord messages, with a UTF-8 attachment for reports that would exceed five messages. Both formats include dates, source links, known-exploitation signals, weekly topic groupings, and coverage warnings. Empty windows never produce fabricated stories.
+Reports are ephemeral (visible only to the requesting user). PDFs use readable section headings, embedded fonts, and numbered pages. They are generated in memory and uploaded to Discord; the app does not save report files. Text uses Discord messages, with a UTF-8 attachment for reports that would exceed five messages. Both formats include dates, source links, known-exploitation signals, weekly topic groupings, and coverage warnings. Empty windows never produce fabricated stories.
 
-Daily covers the last 36 hours; weekly covers seven days, up to ten selected stories. Weekly groups attributed excerpts by topic using keywords rather than inventing editorial conclusions. Summaries are bounded exact source excerpts. Read the original advisory before acting: excerpt matching does not independently fact-check a source.
+Daily covers the last 36 hours; weekly covers seven days, up to ten selected stories. Weekly groups attributed excerpts by topic, including vendor hardening releases, without inventing editorial conclusions. Selection uses publisher rounds with at most three updates per publisher; known-exploitation signals and substantive advisories take priority over routine hardening announcements. Summaries are bounded exact source excerpts. Selected articles are retrieved in parallel to extract affected products/versions, patches, workarounds, and source exploitation statements. Cisco uses explicit advisory sections; Microsoft uses its public CVRF API (including the original release month for revised CVEs); CISA uses structured CSAF product and remediation records. Fortinet uses its official HTML counterpart when the feed points to a CVRF URL, preserving version-to-fix tables and workaround instructions. The three most recent Fortinet entries published within 30 days are checked for revisions, so an advisory published earlier but updated this week can enter the weekly report; original publication dates are retained and day-precision update dates are labeled. Other publishers use article headings or attributed paragraphs. Missing fields are marked as not provided, not guessed. Any retrieval failure remains visible in coverage warnings. Read the original advisory before acting: excerpt matching does not independently fact-check a source.
 
 ## Run the bot
 
@@ -35,14 +35,16 @@ Optional `OPENAI_API_KEY` and `OPENAI_MODEL` enable exact excerpt selection thro
 
 | Purpose | Sources |
 | --- | --- |
-| Government guidance | Canadian Centre for Cyber Security, CISA |
+| Government guidance | Canadian Centre for Cyber Security, CISA official CSAF IT/OT/VA repository |
 | Vendor advisories | Microsoft MSRC, Cisco Security Advisories, Fortinet PSIRT |
 | Technical research | Google Threat Intelligence / Mandiant, Cisco Talos |
 | Reporting and discovery | The Record, BleepingComputer, The Hacker News |
 
 URLs and source tiers are configured in `sources.yaml`. Primary sources lead when duplicates merge; supporting evidence links remain available. Google/Mandiant share one official feed. CISA KEV is separate enrichment and falls back to CISA's official `cisagov/kev-data` GitHub mirror. KEV membership is not blanket verification of a story.
 
-Last cloud check verified seven news feeds and 1,739 KEV entries. CISA advisories returned an upstream 403. Cisco and Fortinet require `sec.cloudapps.cisco.com` and `filestore.fortinet.com`; their allowlist entries are saved but live feeds remain unverified. Feed availability can change; inspect each report's coverage warnings. Alert feeds do not cover every government guidance page.
+CISA's website RSS endpoint denies cloud requests, so the configured CISA adapter uses its official `cisagov/CSAF` repository instead. It reads IT, OT, and VA change indexes and verifies each document against the published SHA-512 checksum before use. This is an official alternative advisory collection, not a claim that every item in the website RSS is mirrored. Up to 30 recent records per collection are retrieved per build, with two latest records when a collection has no updates in the last seven days. The report's normal time window still applies.
+
+Live validation returned ten detailed weekly stories from eight publishers with zero retrieval errors. Cisco and Fortinet feed hosts are `sec.cloudapps.cisco.com` and `filestore.fortinet.com`. Full articles also require `cyber.gc.ca`, `thehackernews.com`, and `msrc.microsoft.com`; Microsoft's CVRF lookup uses `api.msrc.microsoft.com`. Previously saved network domains remain intact. Feed availability can change; coverage errors are never suppressed. Alert feeds do not cover every government guidance page.
 
 Discord runtime access requires `discord.com` and `gateway.discord.gg` as well as the configured feed destinations. Do not disable TLS verification to resolve access failures.
 
@@ -52,7 +54,7 @@ Discord runtime access requires `discord.com` and `gateway.discord.gg` as well a
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest -q
 .venv/bin/python -m cyberbrief.cli build --fixtures --out site
-.venv/bin/python -m cyberbrief.cli build --period weekly --out /tmp/cyberfeed-live
+.venv/bin/python -m cyberbrief.cli build --period weekly --format all --strict --out /tmp/cyberfeed-live
 ```
 
-The CLI exports JSON for local diagnosis. Demo fixtures are explicitly fictional and are never selected by Discord commands. Automated checks verify persistent per-user preferences, command format overrides, private mocked Discord delivery, message limits, source warnings, and PDF text extraction/pagination. Actual Discord login, command registration, and attachment delivery require a token and an installed bot and remain unverified. Scheduling is not implemented.
+The CLI exports JSON by default and can generate text, PDF, or all formats locally with `--format`. The PDF is written as `briefing.pdf` in the output directory, so it can be tested without Discord. `--strict` exits with status 2 when retrieval errors exist; it never silently calls partial coverage successful. Demo fixtures are explicitly fictional and are never selected by Discord commands. Automated checks verify advisory section extraction, CISA checksum rejection, MSRC version/build mapping, source balance, trusted retrieval hosts and redirects, visible failures, persistent per-user preferences, command format overrides, private mocked Discord delivery, message limits, source warnings, and PDF text extraction/pagination. Actual Discord login, command registration, and attachment delivery require a token and an installed bot and remain unverified. Scheduling is not implemented.
