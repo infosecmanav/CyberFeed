@@ -4,18 +4,6 @@ Daily and weekly cybersecurity reports from a curated set of government, vendor,
 
 **Current status:** scheduled source-based reports work without an AI key. The approved black-and-blue AI report design is available as a preview. Automated AI generation and connection of that design to scheduled delivery are **not yet implemented**.
 
-## What is included
-
-| Feature | Status |
-| --- | --- |
-| Live source collection, advisory details, and CVE/KEV enrichment | Implemented |
-| Balanced selection: up to ten updates, at most three per publisher | Implemented |
-| Daily and Friday weekly GitHub Actions delivery | Implemented; requires your Discord webhook |
-| Interactive Discord bot with saved PDF/text preferences | Implemented; optional separate process |
-| Cyber Feed black-and-blue report design | Approved preview |
-| Per-update AI summary, detailed AI report, and references | Preview and agent instructions available |
-| Automatic AI-provider calls for the new report format | Pending |
-
 ## Quick start: fork and schedule Discord delivery
 
 This is the recommended setup for reports that arrive automatically. You do not need to keep a computer or bot process running.
