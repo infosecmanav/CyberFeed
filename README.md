@@ -2,6 +2,16 @@
 
 A Discord bot that builds daily or weekly cybersecurity briefings from curated feeds. Each user can save a text or PDF preference. No website or HTTP server is required.
 
+## Use your own fork and credentials
+
+Fork this repository into your own GitHub account, then clone your fork. In your fork's Actions tab, enable workflows if prompted. Repository secrets from the original repository are not copied to forks.
+
+For scheduled delivery, create your own Discord channel webhook and save its URL as the repository Actions secret `DISCORD_WEBHOOK_URL` under Settings → Secrets and variables → Actions. Run **Scheduled Discord Briefings** manually once to verify delivery. GitHub supplies its own limited workflow token for checkout and artifacts; you do not need to add a personal GitHub API key.
+
+All credential entries in `.env.example` are intentionally empty. For local use, copy it to the ignored `.env` file and supply your own values securely; the application does not automatically load that file, so variables must be exported by your shell or host. Never edit `.env.example` to contain real credentials or commit `.env`.
+
+The approved **Cyber Feed** AI layout remains a standalone preview. `OPENAI_API_KEY` currently enables only optional excerpt selection in the interactive bot. Adding that key to a fork does not enable detailed AI summaries in the scheduled workflow; provider integration and connection of the new renderer are still pending. No provider credential is bundled with the repository.
+
 ## Commands
 
 - `/briefing_settings format:pdf` saves PDF as your default; choose `text` for Discord messages.
