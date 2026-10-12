@@ -1,22 +1,86 @@
-name: Build Cyber Briefing
+name: Scheduled Discord Briefings
 on:
   workflow_dispatch:
+    inputs:
+      period:
+        description: Report period
+        type: choice
+        options:
+          - daily
+          - weekly
+        default: daily
+      format:
+        description: Report format
+        type: choice
+        options:
+          - pdf
+          - text
+        default: pdf
   schedule:
-    - cron: '15 11 * * *'
+    # Toronto daily 08:50; Friday weekly 08:30. Gate selects the DST slot.
+    - cron: '50 12 * * *'
+    - cron: '50 13 * * *'
+    - cron: '30 12 * * 5'
+    - cron: '30 13 * * 5'
 permissions:
   contents: read
+concurrency:
+  group: daily-discord-briefing
+  cancel-in-progress: false
 jobs:
-  build:
+  schedule:
     runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.gate.outputs.enabled }}
+      period: ${{ steps.gate.outputs.period }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Toronto morning slot
+        id: gate
+        env:
+          REPORT_PERIOD: ${{ inputs.period || 'daily' }}
+          SCHEDULE_EXPRESSION: ${{ github.event.schedule }}
+        run: python3 -m cyberbrief.schedule
+  deliver:
+    needs: schedule
+    if: needs.schedule.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r requirements-dev.txt
-      - run: python -m pytest -q
-      - run: python -m cyberbrief.cli build --format all --out site
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+      - name: Install and test
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pytest -q
+      - name: Check Discord delivery configuration
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          if not os.getenv('DISCORD_WEBHOOK_URL'):
+              raise SystemExit('Add DISCORD_WEBHOOK_URL in repository Actions secrets before running.')
+          PY
+      - name: Build report for the Toronto delivery window
+        # Preserve explicit source warnings in the report if coverage is partial.
+        env:
+          REPORT_PERIOD: ${{ needs.schedule.outputs.period }}
+        run: python -m cyberbrief.cli build --period "$REPORT_PERIOD" --scheduled-window --format all --out site
       - uses: actions/upload-artifact@v4
         with:
-          name: briefing-reports
+          name: ${{ needs.schedule.outputs.period }}-briefing-${{ github.run_id }}
           path: site
+          retention-days: 7
+          if-no-files-found: error
+      - name: Send report to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPORT_FORMAT: ${{ inputs.format || vars.BRIEFING_FORMAT || 'pdf' }}
+        run: python -m cyberbrief.webhook --out site --format "$REPORT_FORMAT"

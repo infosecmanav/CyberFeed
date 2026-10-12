@@ -65,7 +65,7 @@ def verified_document(url, timeout=12):
     return parse_document(json.loads(response.content), url)
 
 
-def fetch_cisa_csaf(timeout=12):
+def fetch_cisa_csaf(timeout=12, since=None):
     candidates, errors = set(), []
     now = datetime.now(timezone.utc)
     for scope in ('IT', 'OT', 'VA'):
@@ -86,7 +86,7 @@ def fetch_cisa_csaf(timeout=12):
                 raise ValueError('No valid dated CSAF index records')
             parsed.sort(reverse=True)
             # All recent updates (bounded) plus two latest records for readiness.
-            chosen = [p for p in parsed if now-p[0] <= timedelta(days=7)] or parsed[:2]
+            chosen = [p for p in parsed if p[0] >= (since or now-timedelta(days=8))] or parsed[:2]
             for _, path in chosen[:30]: candidates.add(root + '/' + path)
         except (requests.RequestException, ValueError) as exc:
             errors.append({'source': f'CISA CSAF {scope}', 'error': str(exc)[:250]})

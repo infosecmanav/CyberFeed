@@ -37,13 +37,13 @@ def parse_date(value):
     raise ValueError("Missing or invalid publication date")
 
 
-def fetch_feeds(sources, timeout=15):
+def fetch_feeds(sources, timeout=15, since=None):
     stories = []
     errors = []
     for src in sources:
         if src.get('adapter') == 'cisa_csaf':
             from .csaf import fetch_cisa_csaf
-            fetched, failures = fetch_cisa_csaf(timeout)
+            fetched, failures = fetch_cisa_csaf(timeout, since=since)
             stories.extend(fetched)
             errors.extend(failures)
             continue

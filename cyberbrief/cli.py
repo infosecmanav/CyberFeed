@@ -12,9 +12,15 @@ def main():
     parser.add_argument('--fixtures', action='store_true')
     parser.add_argument('--period', choices=['daily', 'weekly'], default='daily')
     parser.add_argument('--format', choices=['json', 'text', 'pdf', 'all'], default='json')
+    parser.add_argument('--scheduled-window', action='store_true', help='Toronto daily cutoff or completed Friday-Thursday week')
     parser.add_argument('--strict', action='store_true', help='Exit with status 2 if any source or advisory retrieval failed')
     args = parser.parse_args()
-    data = build(args.period, args.fixtures)
+    if args.scheduled_window:
+        from .schedule import report_window
+        start, end = report_window(args.period)
+        data = build(args.period, args.fixtures, window_start=start, window_end=end)
+    else:
+        data = build(args.period, args.fixtures)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     if args.format in ('json', 'all'):

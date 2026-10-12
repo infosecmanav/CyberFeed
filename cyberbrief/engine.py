@@ -66,16 +66,23 @@ def select_stories(stories, limit=10, per_source=3):
     return selected
 
 
-def build(period="daily", fixtures=False, key=None, model=None):
+def build(period="daily", fixtures=False, key=None, model=None, *, window_start=None, window_end=None):
     if period not in ("daily", "weekly"):
         raise ValueError("Choose daily or weekly")
+    if (window_start is None) != (window_end is None):
+        raise ValueError('Both report boundaries are required')
+    if window_start is not None and (window_start.tzinfo is None or window_end.tzinfo is None or window_start >= window_end):
+        raise ValueError('Report boundaries must be timezone-aware and increasing')
     # Loading is mandatory even when deterministic extraction is used.
     (ROOT / "SKILL.md").read_text()
     errors = []
     if fixtures:
         stories, kev = fixture_stories(), {}
     else:
-        stories, errors = fetch_feeds(load_sources(ROOT / "sources.yaml"))
+        if window_start is not None:
+            stories, errors = fetch_feeds(load_sources(ROOT / "sources.yaml"), since=window_start)
+        else:
+            stories, errors = fetch_feeds(load_sources(ROOT / "sources.yaml"))
         try: kev = fetch_cisa_kev()
         except Exception: kev = {}; errors.append({"source": "CISA KEV", "error": "Catalog unavailable; membership unknown"})
     now = datetime.now(timezone.utc)
@@ -89,9 +96,11 @@ def build(period="daily", fixtures=False, key=None, model=None):
             if detail.get('error'):
                 errors.append({'source': story.source, 'error': detail['error'], 'url': story.url})
     window = timedelta(hours=36) if period == "daily" else timedelta(days=7)
+    end = window_end or now
+    start = window_start or (now-window)
     def effective_date(story):
         return datetime.fromisoformat(story.details['updated_at']) if story.details.get('updated_at') else story.published
-    stories = [s for s in cluster_stories(stories) if timedelta(0) <= now-effective_date(s) <= window]
+    stories = [s for s in cluster_stories(stories) if start <= effective_date(s) < end]
     for s in stories: score_story(s, kev)
     stories = select_stories(stories)
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -121,6 +130,6 @@ def build(period="daily", fixtures=False, key=None, model=None):
         item['kev'] = bool(item['known_exploited_cves'])
         result.append(item)
     return {"period": period, "generated": now.isoformat(), "demo": fixtures, "stories": result, "errors": errors,
-            "window_start": (now-window).isoformat(), "window_end": now.isoformat(),
+            "window_start": start.isoformat(), "window_end": end.isoformat(),
             "selection": "Up to 10 updates; at most 3 per publisher, selected in ranked publisher rounds",
             "weekly_digest": weekly_digest(result) if period == "weekly" else []}
