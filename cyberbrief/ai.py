@@ -13,6 +13,7 @@ from .editorial import pack, validate
 
 ROOT = Path(__file__).resolve().parent.parent
 BASES = {'groq': 'https://api.groq.com/openai/v1', 'openrouter': 'https://openrouter.ai/api/v1', 'openai': 'https://api.openai.com/v1'}
+GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta'
 LOGGER = logging.getLogger(__name__)
 TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
 MAX_ATTEMPTS = 3
@@ -23,6 +24,22 @@ PROVIDER_REASON_CODES = frozenset({'API_KEY_INVALID', 'API_KEY_EXPIRED', 'API_KE
 
 class AIError(RuntimeError):
     """A safe-to-display failure: never contains keys or provider response bodies."""
+
+
+class AIHTTPError(AIError):
+    """An HTTP failure whose status can guide bounded, provider-specific fallback."""
+
+    def __init__(self, status, message):
+        super().__init__(message)
+        self.status = status
+        self.retry_delay = None
+
+
+def gemini_transport():
+    transport = (os.getenv('AI_GEMINI_TRANSPORT') or 'auto').strip().lower()
+    if transport not in ('auto', 'native', 'openai-compatible'):
+        raise AIError('AI_GEMINI_TRANSPORT must be auto, native, or openai-compatible.')
+    return transport
 
 
 def _retry_delay(response, attempt):
@@ -76,14 +93,14 @@ def _http_error(status, attempts, response=None):
         if codes:
             prefix += codes.strip() + ' '
     if status in TRANSIENT_STATUSES:
-        return AIError(prefix + 'the provider is temporarily unavailable. Retry later or select another available model.')
+        return AIHTTPError(status, prefix + 'the provider is temporarily unavailable. Retry later or select another available model.')
     if status == 404:
-        return AIError(prefix + 'check AI_PROVIDER, AI_MODEL, and any custom AI_BASE_URL; the requested model or endpoint was not found.')
+        return AIHTTPError(status, prefix + 'check AI_MODEL and the provider\'s generation endpoint; the requested model or endpoint was not found.')
     if status in (401, 403):
-        return AIError(prefix + 'check AI_API_KEY and the account\'s access to the selected model.')
+        return AIHTTPError(status, prefix + 'check AI_API_KEY and the account\'s access to the selected model.')
     if status == 429:
-        return AIError(prefix + 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.')
-    return AIError(prefix + 'check model access and API settings.')
+        return AIHTTPError(status, prefix + 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.')
+    return AIHTTPError(status, prefix + 'check model access and API settings.')
 
 
 def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS):
@@ -99,11 +116,14 @@ def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS):
                     if len(raw) > 2_000_000:
                         raise AIError('AI response exceeds the 2 MB limit.')
                 return raw
-            if status not in TRANSIENT_STATUSES or attempt == max_attempts:
-                raise _http_error(status, attempt, response)
-            delay = _retry_delay(response, attempt)
-            if delay is None:
+            delay = _retry_delay(response, attempt) if status in TRANSIENT_STATUSES else None
+            if status in TRANSIENT_STATUSES and delay is None:
                 raise AIError(f'AI request failed (HTTP {status}); the provider requested a retry delay longer than 60 seconds. Retry later.')
+            if status not in TRANSIENT_STATUSES or attempt == max_attempts:
+                error = _http_error(status, attempt, response)
+                if status in TRANSIENT_STATUSES and response.headers.get('Retry-After'):
+                    error.retry_delay = delay
+                raise error
         # Close the response before waiting. Never log URLs, keys, or raw bodies.
         LOGGER.warning('AI provider returned HTTP %s; retrying in %.0f seconds (attempt %s/%s).', status, delay, attempt + 1, max_attempts)
         time.sleep(delay)
@@ -117,6 +137,7 @@ class AIConfig:
     base_url: str = ''
     max_output_tokens: int = 16384
     json_mode: bool = True
+    gemini_transport: str = 'auto'
 
     @classmethod
     def from_env(cls):
@@ -134,8 +155,12 @@ class AIConfig:
             model = model.removeprefix('models/')
             if not re.fullmatch(r'[A-Za-z0-9._-]+', model):
                 raise AIError('Invalid Gemini model identifier.')
-            base = 'https://generativelanguage.googleapis.com/v1beta'
+            base = GEMINI_BASE
         else:
+            if provider == 'openai':
+                # A leftover Gemini base URL must never receive an OpenAI key.
+                # Custom services should select openai-compatible explicitly.
+                base = BASES['openai']
             try:
                 parts = urlparse(base)
                 port = parts.port
@@ -151,18 +176,30 @@ class AIConfig:
         mode = (os.getenv('AI_JSON_MODE') or 'true').lower()
         if mode not in ('true', 'false'):
             raise AIError('AI_JSON_MODE must be true or false.')
-        return cls(provider, model, key, base, limit, mode == 'true')
+        transport = gemini_transport() if provider == 'gemini' else 'auto'
+        return cls(provider, model, key, base, limit, mode == 'true', transport)
 
 
 def preflight(config):
     """Log effective non-secret settings and check native Gemini model metadata."""
     settings = {'provider': config.provider, 'model': config.model, 'base_url': config.base_url}
+    if config.provider == 'gemini':
+        settings['gemini_transport'] = config.gemini_transport
     safe = {name: value.replace(config.api_key, '[redacted]') if config.api_key else value
             for name, value in settings.items()}
     print('AI configuration: ' + json.dumps(safe), flush=True)
     if config.provider == 'gemini':
         from .gemini_models import check_model
-        check_model(config.api_key, config.model)
+        if config.gemini_transport == 'openai-compatible':
+            print('Google-compatible generation selected; the generation request will verify model access.', flush=True)
+            return
+        try:
+            check_model(config.api_key, config.model)
+        except AIHTTPError as error:
+            if config.gemini_transport == 'auto' and error.status in ({404} | TRANSIENT_STATUSES):
+                LOGGER.warning('Native Gemini metadata returned HTTP %s; generation will verify access using the configured Google interfaces.', error.status)
+                return
+            raise
         print('Gemini model metadata check passed. This does not verify generation access or quota.', flush=True)
 
 
@@ -171,23 +208,47 @@ def request_editorial(payload, config):
     evidence = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
     if len(evidence.encode('utf-8')) > 1_000_000:
         raise AIError('Evidence exceeds the 1 MB request limit; reduce the input scope.')
-    if config.provider == 'gemini':
-        url = f'{config.base_url}/models/{config.model}:generateContent'
+    return request_json(config, instructions, evidence)
+
+
+def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS):
+    """Generate JSON, optionally trying Google's second interface with its own key."""
+    native = config.provider == 'gemini' and config.gemini_transport != 'openai-compatible'
+    compatible_base = GEMINI_BASE + '/openai' if config.provider == 'gemini' else config.base_url
+    compatible_body = {'model': config.model, 'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': evidence}], 'max_tokens': config.max_output_tokens}
+    if config.provider == 'openai':
+        compatible_body['max_completion_tokens'] = compatible_body.pop('max_tokens')
+    if config.json_mode:
+        compatible_body['response_format'] = {'type': 'json_object'}
+    if native:
+        url = f'{GEMINI_BASE}/models/{config.model}:generateContent'
         headers = {'x-goog-api-key': config.api_key}
         generation = {'maxOutputTokens': config.max_output_tokens}
         if config.json_mode: generation['responseMimeType'] = 'application/json'
         body = {'systemInstruction': {'parts': [{'text': instructions}]}, 'contents': [{'role': 'user', 'parts': [{'text': evidence}]}], 'generationConfig': generation}
     else:
-        url = config.base_url + '/chat/completions'
+        url = compatible_base + '/chat/completions'
         headers = {'Authorization': 'Bearer ' + config.api_key}
-        body = {'model': config.model, 'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': evidence}], 'max_tokens': config.max_output_tokens}
-        if config.json_mode: body['response_format'] = {'type': 'json_object'}
+        body = compatible_body
     # Do not follow redirects with credentials or print raw bodies.
     # TLS verification stays enabled; transient HTTP retries are bounded.
     try:
-        raw = _request_bytes(url, headers, body)
+        try:
+            raw = _request_bytes(url, headers, body, max_attempts=max_attempts)
+        except AIHTTPError as native_error:
+            if not native or config.gemini_transport != 'auto' or native_error.status not in ({404} | TRANSIENT_STATUSES):
+                raise
+            LOGGER.warning('Native Gemini generation returned HTTP %s; trying Google\'s OpenAI-compatible interface once with the same model and Gemini key.', native_error.status)
+            if native_error.retry_delay is not None:
+                LOGGER.warning('Honoring provider Retry-After: waiting %.0f seconds before the Google compatibility request.', native_error.retry_delay)
+                time.sleep(native_error.retry_delay)
+            try:
+                raw = _request_bytes(GEMINI_BASE + '/openai/chat/completions', {'Authorization': 'Bearer ' + config.api_key}, compatible_body, max_attempts=1)
+            except AIHTTPError as compatible_error:
+                raise AIError(f'Gemini generation failed through both Google interfaces. Native: {native_error} Compatibility: {compatible_error}') from None
+            native = False
         result = json.loads(raw)
-        if config.provider == 'gemini':
+        if native:
             candidate = result['candidates'][0]
             if candidate.get('finishReason') != 'STOP':
                 raise AIError('AI response did not finish successfully; check output-token budget and provider restrictions.')
@@ -202,7 +263,7 @@ def request_editorial(payload, config):
         return json.loads(match.group(1) if match else text)
     except requests.RequestException:
         raise AIError('AI service connection failed; check network access and TLS configuration. Network failures are not automatically retried.') from None
-    except (KeyError, IndexError, ValueError, TypeError):
+    except (KeyError, IndexError, ValueError, TypeError, AttributeError):
         raise AIError('AI returned an unsupported response or invalid JSON. Nothing will be delivered.') from None
 
 
@@ -220,4 +281,6 @@ def generate(report, config=None):
     data = dict(report)
     data['editorial'] = {'evidence': payload, 'report': output}
     data['ai'] = {'provider': config.provider, 'model': config.model, 'status': 'validated'}
+    if config.provider == 'gemini':
+        data['ai']['transport_mode'] = config.gemini_transport
     return data

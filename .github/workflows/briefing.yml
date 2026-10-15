@@ -68,6 +68,7 @@ jobs:
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
           AI_MAX_OUTPUT_TOKENS: ${{ vars.AI_MAX_OUTPUT_TOKENS }}
           AI_JSON_MODE: ${{ vars.AI_JSON_MODE }}
+          AI_GEMINI_TRANSPORT: ${{ vars.AI_GEMINI_TRANSPORT }}
         run: |
           python - <<'PY'
           import os
@@ -90,6 +91,7 @@ jobs:
           AI_BASE_URL: ${{ vars.AI_BASE_URL }}
           AI_MAX_OUTPUT_TOKENS: ${{ vars.AI_MAX_OUTPUT_TOKENS }}
           AI_JSON_MODE: ${{ vars.AI_JSON_MODE }}
+          AI_GEMINI_TRANSPORT: ${{ vars.AI_GEMINI_TRANSPORT }}
         run: python -m cyberbrief.cli build --ai --period "$REPORT_PERIOD" --scheduled-window --format all --out site
       - uses: actions/upload-artifact@v4
         with:

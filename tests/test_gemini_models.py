@@ -14,6 +14,7 @@ class Response:
     def __init__(self, data, status=200):
         self.raw = json.dumps(data).encode()
         self.status_code = status
+        self.headers = {}
         self.closed = False
 
     def __enter__(self):
@@ -171,8 +172,18 @@ def test_generation_probe_makes_one_small_json_call(monkeypatch, tmp_path, capsy
     assert 'private-test-key' not in output and 'hidden' not in output
 
 
+def test_generation_probe_uses_same_google_compatibility_fallback_as_reports(monkeypatch):
+    monkeypatch.setenv('AI_GEMINI_TRANSPORT','auto')
+    post=Mock(side_effect=[Response({},404),Response({'choices':[{'finish_reason':'stop','message':{'content':'{"ok":true}'}}]})])
+    monkeypatch.setattr(gemini_models.requests,'post',post)
+    gemini_models.test_generation('private-test-key','gemini-example')
+    assert post.call_count==2
+    assert post.call_args.args==('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',)
+
+
 @pytest.mark.parametrize('status,code', [(404, 'NOT_FOUND'), (503, 'UNAVAILABLE'), (429, 'RESOURCE_EXHAUSTED')])
 def test_generation_probe_failure_reports_only_allowlisted_codes(monkeypatch, status, code):
+    monkeypatch.setenv('AI_GEMINI_TRANSPORT', 'native')
     post = Mock(return_value=Response({'error': {'status': code, 'message': 'private-test-key', 'details': [{'reason': 'MODEL_NOT_FOUND', 'metadata': {'key': 'private-test-key'}}]}}, status))
     monkeypatch.setattr(gemini_models.requests, 'post', post)
     sleep = Mock()

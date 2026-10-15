@@ -60,7 +60,7 @@ Confirm that:
 - The report arrives in the configured channel.
 - Any coverage warnings are visible in the report.
 
-Before collecting feeds, the configuration step logs the effective provider, model ID, and API base URL without the key. For Gemini it also retrieves the exact model's metadata and checks that it advertises `generateContent`. A 404 fails this step with `model not found` and the model ID. Successful metadata lookup does not establish that a generation request will succeed.
+Before collecting feeds, the configuration step logs the effective provider, model ID, and API base URL without the key. For Gemini's native interface it retrieves the exact model's metadata and checks that it advertises `generateContent`. In the default `auto` mode, a metadata 404 or temporary server failure is reported and deferred to generation, which can try Google's second interface. In `native` mode, a metadata 404 stops the workflow with `model not found` and the model ID. Direct `openai-compatible` mode skips native metadata lookup. Successful metadata lookup does not establish that generation will succeed.
 
 Manual runs deliver immediately. Generated JSON, text, and PDF files are retained as a downloadable workflow artifact for seven days.
 
@@ -90,21 +90,24 @@ GitHub scheduled workflows run from the default branch and may be delayed. Publi
 | `AI_API_KEY` | Actions secret or local process environment | Required AI provider key |
 | `AI_PROVIDER` | Actions variable or local process environment | Required provider adapter |
 | `AI_MODEL` | Actions variable or local process environment | Required model identifier available to your account |
-| `AI_BASE_URL` | Actions variable or local process environment | Required for `openai-compatible`; optional override for other compatible adapters |
+| `AI_BASE_URL` | Actions variable or local process environment | Required for `openai-compatible`; optional override for Groq/OpenRouter; ignored by native provider selections `gemini` and `openai` |
 | `AI_MAX_OUTPUT_TOKENS` | Actions variable or local process environment | Response budget; default 16384, subject to model limits |
 | `AI_JSON_MODE` | Actions variable or local process environment | `true` by default; set `false` only if the model cannot accept native JSON mode |
+| `AI_GEMINI_TRANSPORT` | Actions variable or local process environment | Gemini only: `auto` (default), `native`, or `openai-compatible` |
 
 ### Provider compatibility
 
 | `AI_PROVIDER` | API interface / default base URL |
 | --- | --- |
-| `gemini` | Native Google Gemini API at `generativelanguage.googleapis.com` |
+| `gemini` | Google's native Gemini and OpenAI-compatible interfaces at `generativelanguage.googleapis.com` |
 | `groq` | OpenAI-compatible API: `https://api.groq.com/openai/v1` |
 | `openrouter` | OpenAI-compatible API: `https://openrouter.ai/api/v1` |
 | `openai-compatible` | Your own HTTPS `AI_BASE_URL`, ending at the API base (for example `/v1`) |
 | `openai` | OpenAI-compatible API: `https://api.openai.com/v1` |
 
-Gemini always uses `https://generativelanguage.googleapis.com/v1beta`; `AI_BASE_URL` does not override that native adapter. A leading `models/` in `AI_MODEL` is removed before the URL is constructed, so it is never added twice. Keep `AI_PROVIDER=gemini` for Google Gemini keys.
+Keep `AI_PROVIDER=gemini` for Google Gemini keys. The native interface uses `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`. Google's compatibility interface uses `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`. Both stay on Google's servers and authenticate with the same Gemini key. `AI_BASE_URL` does not override either route. A leading `models/` in `AI_MODEL` is removed before constructing the request, so it is never added twice. See [Google's compatibility documentation](https://ai.google.dev/gemini-api/docs/openai).
+
+`AI_GEMINI_TRANSPORT=auto` tries native generation first. A native HTTP 404, or HTTP 500/502/503/504 after its bounded retries, triggers one request through Google's compatibility interface using the same model and evidence. No model or provider is silently substituted. Set `native` to disable this fallback, or `openai-compatible` to use Google's compatibility interface directly. The latter is useful when the native generation route consistently fails. This option does not require an OpenAI key.
 
 Choose a model your account can access, using its exact provider model ID. Free models and quotas depend on the service and account; this application cannot make a paid model free. Gemini, Groq, and OpenRouter can be configured with available free-tier models. Other services work when they support the OpenAI chat-completions interface. Native APIs with a different protocol require another adapter; an API key alone does not establish compatibility.
 
@@ -112,13 +115,15 @@ Generate your key in the provider console: [Google AI Studio](https://aistudio.g
 
 For Gemini, use **Actions → Check Gemini Models → Run workflow** on your default branch to discover current model IDs using the saved `AI_API_KEY`. The workflow lists models that advertise `generateContent` and checks whether the configured `AI_MODEL` appears in that catalog. Read the run summary or **List Gemini generation models** step, then set `AI_MODEL` to the exact ID you choose. Choose a text model with JSON support, rather than an image/audio variant. By default this read-only check does not generate content, collect feeds, or send Discord messages. A listed model may still have account restrictions, paid pricing, insufficient quota, or a temporary outage.
 
-To test generation separately, enable **Also send one minimal JSON generation request (uses API quota)** when starting **Check Gemini Models**. The additional step sends one small JSON request to the configured `AI_MODEL`, with no retries, feed collection, report generation, or Discord delivery. It must receive a complete, valid JSON response to pass. This consumes provider quota and may be billable; passing does not verify the full report's output budget or evidence checks.
+To test generation separately, enable **Also test minimal JSON generation (uses API quota)** when starting **Check Gemini Models**. The additional step tests the configured `AI_MODEL` and `AI_GEMINI_TRANSPORT` without feed collection, report generation, or Discord delivery. It uses one attempt per selected interface: at most two requests in `auto` mode, or one in a single-interface mode. It must receive a complete, valid JSON response to pass. This consumes provider quota and may be billable; passing does not verify the full report's output budget or evidence checks.
 
 The equivalent local commands are `python -m cyberbrief.gemini_models` for listing and `python -m cyberbrief.gemini_models --test-generation` for the optional generation test, with `AI_API_KEY` and, for generation, `AI_MODEL` exported securely. Raw API responses and keys are never printed. HTTP errors include only status and recognized symbolic provider codes, excluding free-form provider messages and metadata.
 
-A single batch request processes all selected stories. Temporary HTTP 500, 502, 503, and 504 responses are retried up to two times (three attempts total), with delays of 10 and 20 seconds. A provider's `Retry-After` header can extend a delay up to 60 seconds; a longer requested wait stops the build so it can be rerun later. Retries can count against provider quotas or billing. Logs report retry status and attempt counts without exposing credentials or provider response bodies.
+A batch request processes all selected stories. Temporary HTTP 500, 502, 503, and 504 responses are retried up to two times (three attempts total), with delays of 10 and 20 seconds. Gemini `auto` mode allows one additional request through Google's compatibility interface after an eligible native failure, for at most four generation attempts total. A provider's `Retry-After` header can extend a delay up to 60 seconds; a longer requested wait stops the build without interface fallback so it can be rerun later. Retries and fallback requests can count against provider quotas or billing. Logs report retry status and attempt counts without exposing credentials or provider response bodies.
 
-Authentication, model-not-found, rate-limit, network, incomplete-response, JSON, and citation failures stop the workflow before delivery without automatic retries. Source collection and Discord delivery are not repeated by AI retries. If the provider rejects native JSON mode, set `AI_JSON_MODE=false`; output must still parse as JSON and pass all evidence checks. Increase/decrease the output budget only within the selected model's supported limits.
+Authentication, rate-limit, network, incomplete-response, JSON, and citation failures stop the workflow before delivery without automatic retries or interface fallback. A model-not-found response also stops delivery after any permitted Gemini interface fallback fails. Source collection and Discord delivery are not repeated by AI retries. If the provider rejects native JSON mode, set `AI_JSON_MODE=false`; output must still parse as JSON and pass all evidence checks. Increase/decrease the output budget only within the selected model's supported limits.
+
+To switch to OpenAI later, replace the repository secret `AI_API_KEY` with your OpenAI API key, set `AI_PROVIDER=openai`, and set `AI_MODEL` to an exact model available to that account. OpenAI uses the fixed `https://api.openai.com/v1` base and `max_completion_tokens`; a leftover Gemini `AI_BASE_URL` or `AI_GEMINI_TRANSPORT` cannot redirect an OpenAI key to Google. Custom OpenAI-compatible hosts must select `AI_PROVIDER=openai-compatible` explicitly. The application does not switch providers or reuse keys between Google and OpenAI automatically.
 
 Existing installations should replace `OPENAI_API_KEY`/`OPENAI_MODEL` with `AI_API_KEY`/`AI_MODEL` and set `AI_PROVIDER`. The old optional excerpt-selection integration has been removed.
 
@@ -294,7 +299,7 @@ Responses are private to the requesting user. Preferences are stored in `.state/
 | `No module named discord` | Activate `.venv` and install `requirements.txt` with its Python interpreter. |
 | AI configuration missing | Set `AI_API_KEY`, `AI_PROVIDER`, and `AI_MODEL`; `.env` is not auto-loaded. |
 | AI HTTP 404 | Check `AI_PROVIDER`, the exact `AI_MODEL` available to your account, and any custom `AI_BASE_URL`. For Gemini, run **Check Gemini Models** in Actions to discover advertised model IDs. A Google project name is not a model ID. |
-| AI HTTP 503 or other temporary server failure | The client retries HTTP 500, 502, 503, and 504 up to three attempts total. If all attempts fail, check provider status, wait, and rerun the failed workflow. Persistent outages may require another available model or provider. |
+| AI HTTP 503 or other temporary server failure | The client retries HTTP 500, 502, 503, and 504 up to three attempts per primary interface. Gemini `auto` mode can make one further request through Google's compatibility interface. If all attempts fail, check provider status and account access, or use another available model/provider. |
 | AI HTTP 429 | Check the provider's rate limits and quota. Automatic retries do not resolve an exhausted free-tier quota. |
 | AI response rejected | Check the model’s JSON support and output budget. Unsupported citations or versions must be corrected, not bypassed. |
 | Token missing despite `.env` | Export the variable; `.env` is not auto-loaded. |

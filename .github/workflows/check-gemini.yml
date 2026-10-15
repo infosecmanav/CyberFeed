@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       test_generation:
-        description: Also send one minimal JSON generation request (uses API quota)
+        description: Also test minimal JSON generation (uses API quota)
         type: boolean
         default: false
 
@@ -34,4 +34,5 @@ jobs:
         env:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_MODEL: ${{ vars.AI_MODEL }}
+          AI_GEMINI_TRANSPORT: ${{ vars.AI_GEMINI_TRANSPORT }}
         run: python -m cyberbrief.gemini_models --test-generation

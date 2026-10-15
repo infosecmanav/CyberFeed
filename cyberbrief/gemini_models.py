@@ -7,7 +7,7 @@ import re
 
 import requests
 
-from .ai import AIError, _http_error, _request_bytes
+from .ai import AIConfig, AIError, AIHTTPError, GEMINI_BASE, _http_error, gemini_transport, request_json
 
 CATALOG_URL = 'https://generativelanguage.googleapis.com/v1beta/models'
 MODEL_ID = re.compile(r'models/(gemini-[A-Za-z0-9._-]{1,180})')
@@ -80,7 +80,7 @@ def check_model(api_key, model):
             if response.status_code != 200:
                 error = _http_error(response.status_code, 1, response)
                 if response.status_code == 404:
-                    raise AIError(f'Gemini model preflight failed: model not found: {model}. {error}')
+                    raise AIHTTPError(404, f'Gemini model preflight failed: model not found: {model}. {error}')
                 raise error
             raw = bytearray()
             for chunk in response.iter_content(65536):
@@ -99,32 +99,17 @@ def check_model(api_key, model):
 
 
 def test_generation(api_key, model):
-    """Make one small JSON generation request, only when explicitly requested."""
+    """Test configured Google interfaces with one attempt per selected interface."""
     model = _model_id(api_key, model)
-    url = f'{CATALOG_URL}/{model}:generateContent'
-    body = {
-        'systemInstruction': {'parts': [{'text': 'Return only valid JSON.'}]},
-        'contents': [{'role': 'user', 'parts': [{'text': 'Return a JSON object containing exactly one property: "ok": true.'}]}],
-        'generationConfig': {'responseMimeType': 'application/json', 'maxOutputTokens': 2048},
-    }
-    try:
-        raw = _request_bytes(url, {'x-goog-api-key': api_key}, body, max_attempts=1)
-        data = json.loads(raw)
-        candidate = data['candidates'][0]
-        if candidate.get('finishReason') != 'STOP':
-            raise AIError('Gemini accepted the generation request but did not finish the small JSON test successfully. Check model restrictions and output limits.')
-        text = ''.join(part.get('text', '') for part in candidate['content']['parts'] if not part.get('thought'))
-        if json.loads(text) != {'ok': True}:
-            raise ValueError()
-    except requests.RequestException:
-        raise AIError('Gemini generation test connection failed; check network access and TLS configuration. No retry was attempted.') from None
-    except (ValueError, TypeError, KeyError, IndexError, AttributeError):
-        raise AIError('Gemini accepted the generation request but returned an invalid JSON test result. Raw response text is hidden.') from None
+    config = AIConfig('gemini', model, api_key, GEMINI_BASE, 2048, True, gemini_transport())
+    result = request_json(config, 'Return only valid JSON.', 'Return a JSON object containing exactly one property: "ok": true.', max_attempts=1)
+    if result != {'ok': True}:
+        raise AIError('Gemini returned an unexpected JSON test result. Raw response text is hidden.')
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--test-generation', action='store_true', help='Make one minimal JSON generation request; consumes API quota.')
+    parser.add_argument('--test-generation', action='store_true', help='Test minimal JSON generation; auto mode may try both Google interfaces and consumes API quota.')
     args = parser.parse_args(argv)
     key = (os.getenv('AI_API_KEY') or '').strip()
     configured = (os.getenv('AI_MODEL') or '').strip().removeprefix('models/')
@@ -133,7 +118,7 @@ def main(argv=None):
             test_generation(key, configured)
             lines = [
                 'Gemini minimal JSON generation test passed.',
-                'The selected model accepted one small generation request and returned the expected JSON.',
+                'The selected model returned the expected JSON through a configured Google interface.',
                 'This does not verify the full report, its token budget, or Discord delivery.',
             ]
         else:

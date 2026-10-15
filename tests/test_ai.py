@@ -30,7 +30,7 @@ class Response:
 
 @pytest.fixture
 def configured(monkeypatch):
-    for name in ('AI_API_KEY','AI_PROVIDER','AI_MODEL','AI_BASE_URL','AI_JSON_MODE','AI_MAX_OUTPUT_TOKENS'):
+    for name in ('AI_API_KEY','AI_PROVIDER','AI_MODEL','AI_BASE_URL','AI_JSON_MODE','AI_MAX_OUTPUT_TOKENS','AI_GEMINI_TRANSPORT'):
         monkeypatch.delenv(name,raising=False)
     monkeypatch.setenv('AI_API_KEY','private-test-key')
     monkeypatch.setenv('AI_PROVIDER','groq')
@@ -162,6 +162,7 @@ def test_actual_workflow_preflight_executes_metadata_check(configured,status):
     script=step['run'].splitlines()
     assert script[0]=="python - <<'PY'" and script[-1]=='PY'
     configured.setenv('AI_PROVIDER','gemini')
+    configured.setenv('AI_GEMINI_TRANSPORT','native')
     configured.setenv('DISCORD_WEBHOOK_URL','configured-test-webhook')
     body={'name':'models/account-model','supportedGenerationMethods':['generateContent']} if status==200 else {'error':{'status':'NOT_FOUND'}}
     get=Mock(return_value=Response(body,status));post=Mock()
@@ -325,3 +326,150 @@ def test_raw_model_json_fence_can_be_parsed_without_relaxing_evidence(configured
         return Response({'choices':[{'finish_reason':'stop','message':{'content':'```json\n'+json.dumps(o)+'\n```'}}]})
     configured.setattr('cyberbrief.ai.requests.post',post)
     assert request_editorial(p,AIConfig.from_env())==o
+
+
+@pytest.mark.parametrize('transport',['auto','native','openai-compatible'])
+def test_gemini_transport_configuration(configured,transport):
+    configured.setenv('AI_PROVIDER','gemini')
+    configured.setenv('AI_GEMINI_TRANSPORT',transport)
+    assert AIConfig.from_env().gemini_transport==transport
+    configured.setenv('AI_GEMINI_TRANSPORT','invalid')
+    with pytest.raises(AIError,match='AI_GEMINI_TRANSPORT'):AIConfig.from_env()
+
+
+@pytest.mark.parametrize('status',[404,500,502,503,504])
+def test_gemini_auto_fallback_stays_on_google_with_same_model_and_key(configured,status,caplog):
+    from urllib.parse import urlparse
+    p,o=sample();configured.setenv('AI_PROVIDER','gemini')
+    native_attempts=1 if status==404 else 3
+    responses=[Response({'error':{'message':'private-test-key'}},status) for _ in range(native_attempts)]
+    responses.append(Response({'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]}))
+    post=Mock(side_effect=responses);sleep=Mock()
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    assert request_editorial(p,AIConfig.from_env())==o
+    assert post.call_count==native_attempts+1
+    for call in post.call_args_list:
+        assert urlparse(call.args[0]).hostname=='generativelanguage.googleapis.com'
+        assert call.kwargs['allow_redirects'] is False
+    native=post.call_args_list[0];compatible=post.call_args_list[-1]
+    assert native.args[0].endswith('/v1beta/models/account-model:generateContent')
+    assert native.kwargs['headers']=={'x-goog-api-key':'private-test-key'}
+    assert compatible.args[0].endswith('/v1beta/openai/chat/completions')
+    assert compatible.kwargs['headers']=={'Authorization':'Bearer private-test-key'}
+    assert compatible.kwargs['json']['model']=='account-model'
+    assert compatible.kwargs['json']['messages'][1]['content']==native.kwargs['json']['contents'][0]['parts'][0]['text']
+    assert compatible.kwargs['json']['response_format']=={'type':'json_object'}
+    assert 'private-test-key' not in caplog.text
+    assert sleep.call_count==max(0,native_attempts-1)
+
+
+@pytest.mark.parametrize('status',[400,401,403,429])
+def test_gemini_auto_does_not_fallback_on_config_auth_or_quota_errors(configured,status):
+    configured.setenv('AI_PROVIDER','gemini')
+    post=Mock(return_value=Response({},status));configured.setattr('cyberbrief.ai.requests.post',post)
+    with pytest.raises(AIError,match=f'HTTP {status}'):request_editorial(sample()[0],AIConfig.from_env())
+    assert post.call_count==1
+
+
+def test_gemini_auto_stops_after_both_google_interfaces_fail(configured):
+    configured.setenv('AI_PROVIDER','gemini')
+    post=Mock(side_effect=[Response({},404),Response({'error':{'message':'private-test-key'}},503)])
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    with pytest.raises(AIError,match='both Google interfaces') as error:
+        request_editorial(sample()[0],AIConfig.from_env())
+    assert 'HTTP 404' in str(error.value) and 'HTTP 503' in str(error.value)
+    assert 'private-test-key' not in str(error.value) and post.call_count==2
+
+
+@pytest.mark.parametrize('retry_after',['30','120'])
+def test_gemini_fallback_honors_final_native_retry_after(configured,retry_after):
+    configured.setenv('AI_PROVIDER','gemini');_,o=sample()
+    responses=[Response({},503),Response({},503),Response({},503,{'Retry-After':retry_after})]
+    responses.append(Response({'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]}))
+    post=Mock(side_effect=responses);sleep=Mock()
+    configured.setattr('cyberbrief.ai.requests.post',post);configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    if retry_after=='120':
+        with pytest.raises(AIError,match='longer than 60 seconds'):request_editorial(sample()[0],AIConfig.from_env())
+        assert post.call_count==3
+        assert [call.args[0] for call in sleep.call_args_list]==[10,20]
+    else:
+        assert request_editorial(sample()[0],AIConfig.from_env())==o
+        assert post.call_count==4
+        assert [call.args[0] for call in sleep.call_args_list]==[10,20,40]
+
+
+@pytest.mark.parametrize('kind',['invalid-json','incomplete','network','long-retry-after'])
+def test_gemini_auto_never_fallbacks_after_uncertain_or_invalid_generation(configured,kind):
+    configured.setenv('AI_PROVIDER','gemini')
+    if kind=='network':
+        post=Mock(side_effect=requests.ConnectionError('private-test-key'))
+    elif kind=='long-retry-after':
+        post=Mock(return_value=Response({},503,{'Retry-After':'120'}))
+    else:
+        finish='STOP' if kind=='invalid-json' else 'MAX_TOKENS'
+        post=Mock(return_value=Response({'candidates':[{'finishReason':finish,'content':{'parts':[{'text':'not JSON'}]}}]}))
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    with pytest.raises(AIError):request_editorial(sample()[0],AIConfig.from_env())
+    assert post.call_count==1
+
+
+def test_explicit_google_compatible_transport_ignores_custom_host_and_never_calls_native(configured):
+    _,o=sample();configured.setenv('AI_PROVIDER','gemini')
+    configured.setenv('AI_GEMINI_TRANSPORT','openai-compatible')
+    configured.setenv('AI_BASE_URL','https://unrelated.example/v1')
+    post=Mock(return_value=Response({'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]}))
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    assert request_editorial(sample()[0],AIConfig.from_env())==o
+    assert post.call_count==1
+    assert post.call_args.args==('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',)
+
+
+def test_native_only_mode_never_uses_compatible_fallback(configured):
+    configured.setenv('AI_PROVIDER','gemini');configured.setenv('AI_GEMINI_TRANSPORT','native')
+    post=Mock(return_value=Response({},404));configured.setattr('cyberbrief.ai.requests.post',post)
+    with pytest.raises(AIError,match='HTTP 404'):request_editorial(sample()[0],AIConfig.from_env())
+    assert post.call_count==1
+
+
+def test_openai_uses_its_key_host_and_completion_token_parameter(configured):
+    _,o=sample();configured.setenv('AI_PROVIDER','openai')
+    configured.setenv('AI_GEMINI_TRANSPORT','invalid-but-irrelevant')
+    configured.setenv('AI_BASE_URL','https://generativelanguage.googleapis.com/v1beta')
+    post=Mock(return_value=Response({'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]}))
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    assert request_editorial(sample()[0],AIConfig.from_env())==o
+    assert post.call_args.args==('https://api.openai.com/v1/chat/completions',)
+    assert post.call_args.kwargs['json']['max_completion_tokens']==16384
+    assert 'max_tokens' not in post.call_args.kwargs['json']
+
+
+@pytest.mark.parametrize('transport',['auto','native','openai-compatible'])
+def test_preflight_uses_transport_policy_for_native_metadata_404(configured,transport,caplog):
+    from cyberbrief.ai import AIHTTPError
+    configured.setenv('AI_PROVIDER','gemini');configured.setenv('AI_GEMINI_TRANSPORT',transport)
+    check=Mock(side_effect=AIHTTPError(404,'metadata not found'))
+    configured.setattr('cyberbrief.gemini_models.check_model',check)
+    if transport=='native':
+        with pytest.raises(AIError,match='metadata not found'):preflight(AIConfig.from_env())
+    else:
+        preflight(AIConfig.from_env())
+    assert check.call_count==(0 if transport=='openai-compatible' else 1)
+    if transport=='auto':assert 'metadata returned HTTP 404' in caplog.text
+
+
+@pytest.mark.parametrize('transport',['native','openai-compatible','auto'])
+def test_gemini_transport_generates_validated_detailed_pdf(configured,transport):
+    p,o=sample();configured.setenv('AI_PROVIDER','gemini');configured.setenv('AI_GEMINI_TRANSPORT',transport)
+    report={'period':p['period'],'generated':p['generated'],'stories':[{} for _ in p['stories']],'errors':[],'demo':False}
+    configured.setattr('cyberbrief.ai.pack',lambda *a,**k:p)
+    native={'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':json.dumps(o)}]}}]}
+    compatible={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]}
+    responses=[Response(native)] if transport=='native' else [Response(compatible)]
+    if transport=='auto':responses.insert(0,Response({},404))
+    configured.setattr('cyberbrief.ai.requests.post',Mock(side_effect=responses))
+    result=generate(report)
+    assert result['ai']['provider']=='gemini' and result['ai']['status']=='validated'
+    text='\n'.join(page.extract_text() for page in PdfReader(BytesIO(pdf_report(result))).pages)
+    assert 'Cyber Feed' in text and text.count('References')==10
+    assert 'private-test-key' not in text
