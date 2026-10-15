@@ -71,10 +71,14 @@ jobs:
         run: |
           python - <<'PY'
           import os
-          from cyberbrief.ai import AIConfig
-          AIConfig.from_env()
-          if not os.getenv('DISCORD_WEBHOOK_URL'):
-              raise SystemExit('Add DISCORD_WEBHOOK_URL in repository Actions secrets before running.')
+          from cyberbrief.ai import AIConfig, AIError, preflight
+          try:
+              config = AIConfig.from_env()
+              if not os.getenv('DISCORD_WEBHOOK_URL'):
+                  raise AIError('Add DISCORD_WEBHOOK_URL in repository Actions secrets before running.')
+              preflight(config)
+          except AIError as error:
+              raise SystemExit(str(error)) from None
           PY
       - name: Build report for the Toronto delivery window
         # Preserve explicit source warnings in the report if coverage is partial.

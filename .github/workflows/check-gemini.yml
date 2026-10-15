@@ -2,6 +2,11 @@ name: Check Gemini Models
 
 on:
   workflow_dispatch:
+    inputs:
+      test_generation:
+        description: Also send one minimal JSON generation request (uses API quota)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,3 +29,9 @@ jobs:
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
           AI_MODEL: ${{ vars.AI_MODEL }}
         run: python -m cyberbrief.gemini_models
+      - name: Test minimal Gemini generation
+        if: inputs.test_generation == true
+        env:
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_MODEL: ${{ vars.AI_MODEL }}
+        run: python -m cyberbrief.gemini_models --test-generation

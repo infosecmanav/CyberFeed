@@ -111,7 +111,7 @@ def test_cli_reports_model_presence_and_writes_safe_summary(monkeypatch, tmp_pat
     summary = tmp_path / 'summary.md'
     monkeypatch.setenv('GITHUB_STEP_SUMMARY', str(summary))
     monkeypatch.setattr(gemini_models.requests, 'get', Mock(return_value=Response({'models': [model('models/gemini-example')]})))
-    gemini_models.main()
+    gemini_models.main([])
     output = capsys.readouterr().out
     assert expected in output and '- gemini-example' in output
     assert 'private-test-key' not in output
@@ -124,12 +124,12 @@ def test_cli_requires_key_and_rejects_empty_catalog(monkeypatch, capsys):
     get = Mock()
     monkeypatch.setattr(gemini_models.requests, 'get', get)
     with pytest.raises(SystemExit, match='secret AI_API_KEY'):
-        gemini_models.main()
+        gemini_models.main([])
     get.assert_not_called()
     monkeypatch.setenv('AI_API_KEY', 'private-test-key')
     get.return_value = Response({'models': []})
     with pytest.raises(SystemExit, match='No Gemini models'):
-        gemini_models.main()
+        gemini_models.main([])
     assert capsys.readouterr().out == ''
 
 
@@ -138,7 +138,117 @@ def test_diagnostic_workflow_is_manual_and_uses_saved_secret():
     workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
     assert set(workflow['on']) == {'workflow_dispatch'}
     assert workflow['permissions'] == {'contents': 'read'}
-    step = workflow['jobs']['models']['steps'][-1]
+    steps = workflow['jobs']['models']['steps']
+    step = next(step for step in steps if step.get('name') == 'List Gemini generation models')
     assert step['run'] == 'python -m cyberbrief.gemini_models'
     assert step['env']['AI_API_KEY'] == '${{ secrets.AI_API_KEY }}'
     assert 'DISCORD_WEBHOOK_URL' not in path.read_text()
+    assert workflow['on']['workflow_dispatch']['inputs']['test_generation']['default'] == 'false'
+    probe = steps[-1]
+    assert probe['if'] == 'inputs.test_generation == true'
+    assert probe['run'] == 'python -m cyberbrief.gemini_models --test-generation'
+
+
+def test_generation_probe_makes_one_small_json_call(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv('AI_API_KEY', 'private-test-key')
+    monkeypatch.setenv('AI_MODEL', 'models/gemini-example')
+    monkeypatch.setenv('GITHUB_STEP_SUMMARY', str(tmp_path / 'summary.md'))
+    post = Mock(return_value=Response({'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'thought': True, 'text': 'hidden'}, {'text': '{"ok":true}'}]}}]}))
+    get = Mock()
+    monkeypatch.setattr(gemini_models.requests, 'post', post)
+    monkeypatch.setattr(gemini_models.requests, 'get', get)
+    gemini_models.main(['--test-generation'])
+    assert post.call_count == 1
+    call = post.call_args
+    assert call.args == (gemini_models.CATALOG_URL + '/gemini-example:generateContent',)
+    assert call.kwargs['headers'] == {'x-goog-api-key': 'private-test-key'}
+    assert call.kwargs['json']['generationConfig'] == {'maxOutputTokens': 2048, 'responseMimeType': 'application/json'}
+    assert not call.kwargs['allow_redirects']
+    assert len(json.dumps(call.kwargs['json'])) < 1000
+    get.assert_not_called()
+    output = capsys.readouterr().out
+    assert 'minimal JSON generation test passed' in output
+    assert 'private-test-key' not in output and 'hidden' not in output
+
+
+@pytest.mark.parametrize('status,code', [(404, 'NOT_FOUND'), (503, 'UNAVAILABLE'), (429, 'RESOURCE_EXHAUSTED')])
+def test_generation_probe_failure_reports_only_allowlisted_codes(monkeypatch, status, code):
+    post = Mock(return_value=Response({'error': {'status': code, 'message': 'private-test-key', 'details': [{'reason': 'MODEL_NOT_FOUND', 'metadata': {'key': 'private-test-key'}}]}}, status))
+    monkeypatch.setattr(gemini_models.requests, 'post', post)
+    sleep = Mock()
+    monkeypatch.setattr('cyberbrief.ai.time.sleep', sleep)
+    with pytest.raises(AIError, match=f'HTTP {status}') as error:
+        gemini_models.test_generation('private-test-key', 'gemini-example')
+    assert code in str(error.value) and 'MODEL_NOT_FOUND' in str(error.value)
+    assert 'private-test-key' not in str(error.value)
+    assert post.call_count == 1
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize('key,model_id', [('', 'gemini-example'), ('key', ''), ('key', 'gemini-example?key=private'), ('key', '../other')])
+def test_probe_configuration_rejected_before_request(monkeypatch, key, model_id):
+    post = Mock()
+    monkeypatch.setattr(gemini_models.requests, 'post', post)
+    with pytest.raises(AIError):
+        gemini_models.test_generation(key, model_id)
+    post.assert_not_called()
+
+
+@pytest.mark.parametrize('result', [
+    {'candidates': [{'finishReason': 'MAX_TOKENS', 'content': {'parts': [{'text': 'private-test-key'}]}}]},
+    {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': 'private-test-key'}]}}]},
+    {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': '{"ok":false}'}]}}]},
+])
+def test_probe_rejects_incomplete_or_invalid_output_without_exposure(monkeypatch, result):
+    post = Mock(return_value=Response(result))
+    monkeypatch.setattr(gemini_models.requests, 'post', post)
+    with pytest.raises(AIError) as error:
+        gemini_models.test_generation('private-test-key', 'gemini-example')
+    assert 'private-test-key' not in str(error.value) and post.call_count == 1
+
+
+def test_exact_model_preflight_normalizes_prefix_and_does_not_generate(monkeypatch):
+    get = Mock(return_value=Response(model('models/gemini-example')))
+    post = Mock()
+    monkeypatch.setattr(gemini_models.requests, 'get', get)
+    monkeypatch.setattr(gemini_models.requests, 'post', post)
+    gemini_models.check_model('private-test-key', 'models/gemini-example')
+    assert get.call_count == 1
+    assert get.call_args.args == (gemini_models.CATALOG_URL + '/gemini-example',)
+    assert get.call_args.kwargs['headers'] == {'x-goog-api-key': 'private-test-key'}
+    assert get.call_args.kwargs['allow_redirects'] is False
+    post.assert_not_called()
+
+
+def test_metadata_404_fails_with_model_id_and_safe_codes(monkeypatch):
+    get = Mock(return_value=Response({'error': {'status': 'NOT_FOUND', 'message': 'private-test-key'}}, 404))
+    monkeypatch.setattr(gemini_models.requests, 'get', get)
+    with pytest.raises(AIError, match='model not found: gemini-example') as error:
+        gemini_models.check_model('private-test-key', 'gemini-example')
+    assert 'HTTP 404' in str(error.value) and 'NOT_FOUND' in str(error.value)
+    assert 'private-test-key' not in str(error.value)
+    assert get.call_count == 1
+
+
+@pytest.mark.parametrize('data', [{}, [], {'name': 'models/other', 'supportedGenerationMethods': ['generateContent']},
+                                  {'name': 'models/gemini-example', 'supportedGenerationMethods': 'generateContent'}])
+def test_invalid_metadata_does_not_pass_preflight(monkeypatch, data):
+    monkeypatch.setattr(gemini_models.requests, 'get', Mock(return_value=Response(data)))
+    with pytest.raises(AIError, match='invalid model metadata'):
+        gemini_models.check_model('private-test-key', 'gemini-example')
+
+
+def test_metadata_embedding_only_model_does_not_pass_preflight(monkeypatch):
+    monkeypatch.setattr(gemini_models.requests, 'get', Mock(return_value=Response(model('models/gemini-example', ['embedContent']))))
+    with pytest.raises(AIError, match='does not advertise generateContent'):
+        gemini_models.check_model('private-test-key', 'gemini-example')
+
+
+def test_metadata_connection_and_size_failures_are_safe(monkeypatch):
+    monkeypatch.setattr(gemini_models.requests, 'get', Mock(side_effect=requests.ConnectionError('private-test-key')))
+    with pytest.raises(AIError, match='preflight connection failed') as error:
+        gemini_models.check_model('private-test-key', 'gemini-example')
+    assert 'private-test-key' not in str(error.value)
+    monkeypatch.setattr(gemini_models.requests, 'get', Mock(return_value=Response({'extra': 'x' * 1_000_000})))
+    with pytest.raises(AIError, match='1 MB limit'):
+        gemini_models.check_model('private-test-key', 'gemini-example')

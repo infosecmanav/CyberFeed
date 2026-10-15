@@ -60,6 +60,8 @@ Confirm that:
 - The report arrives in the configured channel.
 - Any coverage warnings are visible in the report.
 
+Before collecting feeds, the configuration step logs the effective provider, model ID, and API base URL without the key. For Gemini it also retrieves the exact model's metadata and checks that it advertises `generateContent`. A 404 fails this step with `model not found` and the model ID. Successful metadata lookup does not establish that a generation request will succeed.
+
 Manual runs deliver immediately. Generated JSON, text, and PDF files are retained as a downloadable workflow artifact for seven days.
 
 ## Report schedule
@@ -102,13 +104,17 @@ GitHub scheduled workflows run from the default branch and may be delayed. Publi
 | `openai-compatible` | Your own HTTPS `AI_BASE_URL`, ending at the API base (for example `/v1`) |
 | `openai` | OpenAI-compatible API: `https://api.openai.com/v1` |
 
+Gemini always uses `https://generativelanguage.googleapis.com/v1beta`; `AI_BASE_URL` does not override that native adapter. A leading `models/` in `AI_MODEL` is removed before the URL is constructed, so it is never added twice. Keep `AI_PROVIDER=gemini` for Google Gemini keys.
+
 Choose a model your account can access, using its exact provider model ID. Free models and quotas depend on the service and account; this application cannot make a paid model free. Gemini, Groq, and OpenRouter can be configured with available free-tier models. Other services work when they support the OpenAI chat-completions interface. Native APIs with a different protocol require another adapter; an API key alone does not establish compatibility.
 
 Generate your key in the provider console: [Google AI Studio](https://aistudio.google.com/app/apikey), [Groq](https://console.groq.com/keys), or [OpenRouter](https://openrouter.ai/settings/keys). Verify current pricing, model availability, output limits, and quotas there. No model is hardcoded or automatically substituted. Keys must match their provider; a Gemini key cannot authenticate to Groq, for example.
 
-For Gemini, use **Actions → Check Gemini Models → Run workflow** on your default branch to discover current model IDs using the saved `AI_API_KEY`. The workflow lists models that advertise `generateContent` and checks whether the configured `AI_MODEL` appears in that catalog. Read the run summary or **List Gemini generation models** step, then set `AI_MODEL` to the exact ID you choose. Choose a text model with JSON support, rather than an image/audio variant. This read-only check does not generate content, collect feeds, or send Discord messages. A listed model may still have account restrictions, paid pricing, insufficient quota, or a temporary outage.
+For Gemini, use **Actions → Check Gemini Models → Run workflow** on your default branch to discover current model IDs using the saved `AI_API_KEY`. The workflow lists models that advertise `generateContent` and checks whether the configured `AI_MODEL` appears in that catalog. Read the run summary or **List Gemini generation models** step, then set `AI_MODEL` to the exact ID you choose. Choose a text model with JSON support, rather than an image/audio variant. By default this read-only check does not generate content, collect feeds, or send Discord messages. A listed model may still have account restrictions, paid pricing, insufficient quota, or a temporary outage.
 
-The equivalent local diagnostic is `python -m cyberbrief.gemini_models`, with `AI_API_KEY` exported securely. Raw API responses and keys are never printed. Model listing failures report the HTTP status without exposing the response body.
+To test generation separately, enable **Also send one minimal JSON generation request (uses API quota)** when starting **Check Gemini Models**. The additional step sends one small JSON request to the configured `AI_MODEL`, with no retries, feed collection, report generation, or Discord delivery. It must receive a complete, valid JSON response to pass. This consumes provider quota and may be billable; passing does not verify the full report's output budget or evidence checks.
+
+The equivalent local commands are `python -m cyberbrief.gemini_models` for listing and `python -m cyberbrief.gemini_models --test-generation` for the optional generation test, with `AI_API_KEY` and, for generation, `AI_MODEL` exported securely. Raw API responses and keys are never printed. HTTP errors include only status and recognized symbolic provider codes, excluding free-form provider messages and metadata.
 
 A single batch request processes all selected stories. Temporary HTTP 500, 502, 503, and 504 responses are retried up to two times (three attempts total), with delays of 10 and 20 seconds. A provider's `Retry-After` header can extend a delay up to 60 seconds; a longer requested wait stops the build so it can be rerun later. Retries can count against provider quotas or billing. Logs report retry status and attempt counts without exposing credentials or provider response bodies.
 

@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 from pypdf import PdfReader
-from cyberbrief.ai import AIConfig, AIError, request_editorial, generate
+from cyberbrief.ai import AIConfig, AIError, request_editorial, generate, preflight
 from cyberbrief.editorial import validate
 from cyberbrief.reports import sections, pdf_report
 
@@ -90,6 +90,91 @@ def test_api_http_failures_are_sanitized_and_not_retried(configured,status):
     post=Mock(return_value=Response({'secret':'private-test-key'},status));configured.setattr('cyberbrief.ai.requests.post',post)
     with pytest.raises(AIError,match=str(status)) as e:request_editorial(sample()[0],AIConfig.from_env())
     assert 'private-test-key' not in str(e.value) and post.call_count==1
+
+
+def test_provider_error_codes_are_useful_without_printing_error_bodies(configured):
+    body={'error':{'status':'NOT_FOUND','message':'private-test-key https://example.test/?key=private-test-key',
+                   'details':[{'reason':'MODEL_NOT_FOUND','metadata':{'key':'private-test-key'}},
+                              {'reason':'private-test-key'}]}}
+    post=Mock(return_value=Response(body,404));configured.setattr('cyberbrief.ai.requests.post',post)
+    with pytest.raises(AIError) as error:request_editorial(sample()[0],AIConfig.from_env())
+    message=str(error.value)
+    assert 'NOT_FOUND' in message and 'MODEL_NOT_FOUND' in message
+    assert 'private-test-key' not in message and 'https://' not in message
+    assert post.call_count==1
+
+
+@pytest.mark.parametrize('error',[
+    {'status':'private-test-key','message':'private-test-key','details':[{'reason':'private-test-key'}]},
+    {'status':{'secret':'private-test-key'}},
+    {'status':'NOT_FOUND','message':'private-test-key'+'x'*17000},
+])
+def test_arbitrary_or_oversized_provider_diagnostics_are_not_printed(configured,error):
+    configured.setattr('cyberbrief.ai.requests.post',Mock(return_value=Response({'error':error},404)))
+    with pytest.raises(AIError) as failure:request_editorial(sample()[0],AIConfig.from_env())
+    assert 'private-test-key' not in str(failure.value)
+    assert 'Provider code(s)' not in str(failure.value)
+
+
+def test_gemini_base_url_is_fixed_even_when_variable_is_present(configured):
+    configured.setenv('AI_PROVIDER','gemini')
+    configured.setenv('AI_BASE_URL','https://unrelated.example/custom')
+    assert AIConfig.from_env().base_url=='https://generativelanguage.googleapis.com/v1beta'
+
+
+def test_preflight_reports_effective_config_and_checks_gemini_metadata(configured,capsys):
+    configured.setenv('AI_PROVIDER','gemini')
+    configured.setenv('AI_MODEL','models/gemini-example')
+    configured.setenv('AI_BASE_URL','https://unrelated.example/custom')
+    check=Mock();configured.setattr('cyberbrief.gemini_models.check_model',check)
+    config=AIConfig.from_env()
+    preflight(config)
+    check.assert_called_once_with('private-test-key','gemini-example')
+    text=capsys.readouterr().out
+    assert '"provider": "gemini"' in text and '"model": "gemini-example"' in text
+    assert 'https://generativelanguage.googleapis.com/v1beta' in text
+    assert 'unrelated.example' not in text and 'private-test-key' not in text
+    assert 'does not verify generation access' in text
+
+
+def test_preflight_failure_stops_and_keys_are_redacted(configured,capsys):
+    check=Mock(side_effect=AIError('model not found'))
+    configured.setattr('cyberbrief.gemini_models.check_model',check)
+    config=AIConfig('gemini','private-test-key','private-test-key','https://generativelanguage.googleapis.com/v1beta')
+    with pytest.raises(AIError,match='model not found'):preflight(config)
+    text=capsys.readouterr().out
+    assert 'private-test-key' not in text and '[redacted]' in text
+    assert 'metadata check passed' not in text
+
+
+def test_other_providers_do_not_use_gemini_model_preflight(configured,capsys):
+    check=Mock();configured.setattr('cyberbrief.gemini_models.check_model',check)
+    preflight(AIConfig.from_env())
+    check.assert_not_called()
+    assert '"provider": "groq"' in capsys.readouterr().out
+
+
+@pytest.mark.parametrize('status',[200,404])
+def test_actual_workflow_preflight_executes_metadata_check(configured,status):
+    import yaml
+    workflow=yaml.load((ROOT/'.github/workflows/briefing.yml').read_text(),Loader=yaml.BaseLoader)
+    step=next(step for step in workflow['jobs']['deliver']['steps'] if step.get('name')=='Check AI and Discord configuration')
+    script=step['run'].splitlines()
+    assert script[0]=="python - <<'PY'" and script[-1]=='PY'
+    configured.setenv('AI_PROVIDER','gemini')
+    configured.setenv('DISCORD_WEBHOOK_URL','configured-test-webhook')
+    body={'name':'models/account-model','supportedGenerationMethods':['generateContent']} if status==200 else {'error':{'status':'NOT_FOUND'}}
+    get=Mock(return_value=Response(body,status));post=Mock()
+    configured.setattr('cyberbrief.ai.requests.get',get)
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    code=compile('\n'.join(script[1:-1]),'<workflow-preflight>','exec')
+    if status==404:
+        with pytest.raises(SystemExit,match='model not found: account-model'):exec(code,{})
+    else:
+        exec(code,{})
+    assert get.call_args.args==('https://generativelanguage.googleapis.com/v1beta/models/account-model',)
+    assert get.call_count==1
+    post.assert_not_called()
 
 
 @pytest.mark.parametrize('provider',['gemini','groq'])

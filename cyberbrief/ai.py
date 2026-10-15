@@ -17,6 +17,8 @@ LOGGER = logging.getLogger(__name__)
 TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
 MAX_ATTEMPTS = 3
 MAX_RETRY_DELAY = 60
+PROVIDER_STATUS_CODES = frozenset({'CANCELLED', 'UNKNOWN', 'INVALID_ARGUMENT', 'DEADLINE_EXCEEDED', 'NOT_FOUND', 'ALREADY_EXISTS', 'PERMISSION_DENIED', 'RESOURCE_EXHAUSTED', 'FAILED_PRECONDITION', 'ABORTED', 'OUT_OF_RANGE', 'UNIMPLEMENTED', 'INTERNAL', 'UNAVAILABLE', 'DATA_LOSS', 'UNAUTHENTICATED'})
+PROVIDER_REASON_CODES = frozenset({'API_KEY_INVALID', 'API_KEY_EXPIRED', 'API_KEY_SERVICE_BLOCKED', 'API_KEY_HTTP_REFERRER_BLOCKED', 'API_KEY_IP_ADDRESS_BLOCKED', 'SERVICE_DISABLED', 'BILLING_DISABLED', 'CONSUMER_INVALID', 'ACCESS_TOKEN_SCOPE_INSUFFICIENT', 'RATE_LIMIT_EXCEEDED', 'RESOURCE_QUOTA_EXCEEDED', 'MODEL_NOT_FOUND', 'LOCATION_POLICY_VIOLATED'})
 
 
 class AIError(RuntimeError):
@@ -44,8 +46,35 @@ def _retry_delay(response, attempt):
     return max(backoff, requested)
 
 
-def _http_error(status, attempts):
+def _provider_codes(response):
+    """Extract only known symbolic codes, never arbitrary provider error text."""
+    try:
+        raw = bytearray()
+        for chunk in response.iter_content(4096):
+            raw.extend(chunk)
+            if len(raw) > 16384:
+                return ''
+        error = json.loads(raw).get('error', {})
+        code = error.get('status')
+        codes = [code] if code in PROVIDER_STATUS_CODES else []
+        details = error.get('details', [])
+        if isinstance(details, list):
+            for detail in details:
+                if isinstance(detail, dict):
+                    reason = detail.get('reason')
+                    if reason in PROVIDER_REASON_CODES and reason not in codes:
+                        codes.append(reason)
+        return ' Provider code(s): ' + ', '.join(codes) + '.' if codes else ''
+    except (requests.RequestException, ValueError, TypeError, AttributeError):
+        return ''
+
+
+def _http_error(status, attempts, response=None):
     prefix = f'AI request failed (HTTP {status}) after {attempts} attempt(s); '
+    if response is not None:
+        codes = _provider_codes(response)
+        if codes:
+            prefix += codes.strip() + ' '
     if status in TRANSIENT_STATUSES:
         return AIError(prefix + 'the provider is temporarily unavailable. Retry later or select another available model.')
     if status == 404:
@@ -57,10 +86,10 @@ def _http_error(status, attempts):
     return AIError(prefix + 'check model access and API settings.')
 
 
-def _request_bytes(url, headers, body):
+def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS):
     # Retry only explicit transient HTTP failures. Network/read failures may
     # follow a completed generation, so repeating them could consume more quota.
-    for attempt in range(1, MAX_ATTEMPTS + 1):
+    for attempt in range(1, max_attempts + 1):
         with requests.post(url, headers=headers, json=body, timeout=(10, 180), allow_redirects=False, stream=True) as response:
             status = response.status_code
             if 200 <= status < 300:
@@ -70,13 +99,13 @@ def _request_bytes(url, headers, body):
                     if len(raw) > 2_000_000:
                         raise AIError('AI response exceeds the 2 MB limit.')
                 return raw
-            if status not in TRANSIENT_STATUSES or attempt == MAX_ATTEMPTS:
-                raise _http_error(status, attempt)
+            if status not in TRANSIENT_STATUSES or attempt == max_attempts:
+                raise _http_error(status, attempt, response)
             delay = _retry_delay(response, attempt)
             if delay is None:
                 raise AIError(f'AI request failed (HTTP {status}); the provider requested a retry delay longer than 60 seconds. Retry later.')
         # Close the response before waiting. Never log URLs, keys, or raw bodies.
-        LOGGER.warning('AI provider returned HTTP %s; retrying in %.0f seconds (attempt %s/%s).', status, delay, attempt + 1, MAX_ATTEMPTS)
+        LOGGER.warning('AI provider returned HTTP %s; retrying in %.0f seconds (attempt %s/%s).', status, delay, attempt + 1, max_attempts)
         time.sleep(delay)
 
 
@@ -123,6 +152,18 @@ class AIConfig:
         if mode not in ('true', 'false'):
             raise AIError('AI_JSON_MODE must be true or false.')
         return cls(provider, model, key, base, limit, mode == 'true')
+
+
+def preflight(config):
+    """Log effective non-secret settings and check native Gemini model metadata."""
+    settings = {'provider': config.provider, 'model': config.model, 'base_url': config.base_url}
+    safe = {name: value.replace(config.api_key, '[redacted]') if config.api_key else value
+            for name, value in settings.items()}
+    print('AI configuration: ' + json.dumps(safe), flush=True)
+    if config.provider == 'gemini':
+        from .gemini_models import check_model
+        check_model(config.api_key, config.model)
+        print('Gemini model metadata check passed. This does not verify generation access or quota.', flush=True)
 
 
 def request_editorial(payload, config):
