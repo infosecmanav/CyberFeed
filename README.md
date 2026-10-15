@@ -106,7 +106,9 @@ Choose a model your account can access, using its exact provider model ID. Free 
 
 Generate your key in the provider console: [Google AI Studio](https://aistudio.google.com/app/apikey), [Groq](https://console.groq.com/keys), or [OpenRouter](https://openrouter.ai/settings/keys). Verify current pricing, model availability, output limits, and quotas there. No model is hardcoded or automatically substituted. Keys must match their provider; a Gemini key cannot authenticate to Groq, for example.
 
-A single batch request processes all selected stories. Authentication, rate-limit, incomplete-response, JSON, and citation failures stop the workflow before delivery. There are no automatic paid/quota-consuming retries. If the provider rejects native JSON mode, set `AI_JSON_MODE=false`; output must still parse as JSON and pass all evidence checks. Increase/decrease the output budget only within the selected model’s supported limits.
+A single batch request processes all selected stories. Temporary HTTP 500, 502, 503, and 504 responses are retried up to two times (three attempts total), with delays of 10 and 20 seconds. A provider's `Retry-After` header can extend a delay up to 60 seconds; a longer requested wait stops the build so it can be rerun later. Retries can count against provider quotas or billing. Logs report retry status and attempt counts without exposing credentials or provider response bodies.
+
+Authentication, model-not-found, rate-limit, network, incomplete-response, JSON, and citation failures stop the workflow before delivery without automatic retries. Source collection and Discord delivery are not repeated by AI retries. If the provider rejects native JSON mode, set `AI_JSON_MODE=false`; output must still parse as JSON and pass all evidence checks. Increase/decrease the output budget only within the selected model's supported limits.
 
 Existing installations should replace `OPENAI_API_KEY`/`OPENAI_MODEL` with `AI_API_KEY`/`AI_MODEL` and set `AI_PROVIDER`. The old optional excerpt-selection integration has been removed.
 
@@ -281,6 +283,9 @@ Responses are private to the requesting user. Preferences are stored in `.state/
 | --- | --- |
 | `No module named discord` | Activate `.venv` and install `requirements.txt` with its Python interpreter. |
 | AI configuration missing | Set `AI_API_KEY`, `AI_PROVIDER`, and `AI_MODEL`; `.env` is not auto-loaded. |
+| AI HTTP 404 | Check `AI_PROVIDER`, the exact `AI_MODEL` available to your account, and any custom `AI_BASE_URL`. A Google project name is not a model ID. |
+| AI HTTP 503 or other temporary server failure | The client retries HTTP 500, 502, 503, and 504 up to three attempts total. If all attempts fail, check provider status, wait, and rerun the failed workflow. Persistent outages may require another available model or provider. |
+| AI HTTP 429 | Check the provider's rate limits and quota. Automatic retries do not resolve an exhausted free-tier quota. |
 | AI response rejected | Check the model’s JSON support and output budget. Unsupported citations or versions must be corrected, not bypassed. |
 | Token missing despite `.env` | Export the variable; `.env` is not auto-loaded. |
 | Bot does not return to the prompt | A connected bot runs continuously. Check gateway connection logs or the reported error. |

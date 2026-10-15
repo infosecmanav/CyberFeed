@@ -1,19 +1,83 @@
 """Required, provider-neutral editorial generation with evidence validation."""
 from dataclasses import dataclass, field
+from email.utils import parsedate_to_datetime
 import json
+import logging
 import os
 from pathlib import Path
 import re
+import time
 from urllib.parse import urlparse
 import requests
 from .editorial import pack, validate
 
 ROOT = Path(__file__).resolve().parent.parent
 BASES = {'groq': 'https://api.groq.com/openai/v1', 'openrouter': 'https://openrouter.ai/api/v1', 'openai': 'https://api.openai.com/v1'}
+LOGGER = logging.getLogger(__name__)
+TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
+MAX_ATTEMPTS = 3
+MAX_RETRY_DELAY = 60
 
 
 class AIError(RuntimeError):
     """A safe-to-display failure: never contains keys or provider response bodies."""
+
+
+def _retry_delay(response, attempt):
+    """Honor Retry-After without waiting indefinitely or retrying too early."""
+    backoff = 10 * 2 ** (attempt - 1)
+    value = response.headers.get('Retry-After', '').strip()
+    if not value or len(value) > 128:
+        return backoff
+    try:
+        requested = int(value)
+    except ValueError:
+        try:
+            date = parsedate_to_datetime(value)
+            if date.tzinfo is None:
+                return backoff
+            requested = date.timestamp() - time.time()
+        except (TypeError, ValueError, OverflowError):
+            return backoff
+    if requested > MAX_RETRY_DELAY:
+        return None
+    return max(backoff, requested)
+
+
+def _http_error(status, attempts):
+    prefix = f'AI request failed (HTTP {status}) after {attempts} attempt(s); '
+    if status in TRANSIENT_STATUSES:
+        return AIError(prefix + 'the provider is temporarily unavailable. Retry later or select another available model.')
+    if status == 404:
+        return AIError(prefix + 'check AI_PROVIDER, AI_MODEL, and any custom AI_BASE_URL; the requested model or endpoint was not found.')
+    if status in (401, 403):
+        return AIError(prefix + 'check AI_API_KEY and the account\'s access to the selected model.')
+    if status == 429:
+        return AIError(prefix + 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.')
+    return AIError(prefix + 'check model access and API settings.')
+
+
+def _request_bytes(url, headers, body):
+    # Retry only explicit transient HTTP failures. Network/read failures may
+    # follow a completed generation, so repeating them could consume more quota.
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        with requests.post(url, headers=headers, json=body, timeout=(10, 180), allow_redirects=False, stream=True) as response:
+            status = response.status_code
+            if 200 <= status < 300:
+                raw = bytearray()
+                for chunk in response.iter_content(65536):
+                    raw.extend(chunk)
+                    if len(raw) > 2_000_000:
+                        raise AIError('AI response exceeds the 2 MB limit.')
+                return raw
+            if status not in TRANSIENT_STATUSES or attempt == MAX_ATTEMPTS:
+                raise _http_error(status, attempt)
+            delay = _retry_delay(response, attempt)
+            if delay is None:
+                raise AIError(f'AI request failed (HTTP {status}); the provider requested a retry delay longer than 60 seconds. Retry later.')
+        # Close the response before waiting. Never log URLs, keys, or raw bodies.
+        LOGGER.warning('AI provider returned HTTP %s; retrying in %.0f seconds (attempt %s/%s).', status, delay, attempt + 1, MAX_ATTEMPTS)
+        time.sleep(delay)
 
 
 @dataclass(frozen=True)
@@ -77,16 +141,10 @@ def request_editorial(payload, config):
         headers = {'Authorization': 'Bearer ' + config.api_key}
         body = {'model': config.model, 'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': evidence}], 'max_tokens': config.max_output_tokens}
         if config.json_mode: body['response_format'] = {'type': 'json_object'}
-    # Do not follow redirects with credentials, print raw bodies, or retry paid/
-    # quota-consuming calls automatically. TLS verification stays enabled.
+    # Do not follow redirects with credentials or print raw bodies.
+    # TLS verification stays enabled; transient HTTP retries are bounded.
     try:
-        with requests.post(url, headers=headers, json=body, timeout=(10, 180), allow_redirects=False, stream=True) as response:
-            if not 200 <= response.status_code < 300:
-                raise AIError(f'AI request failed (HTTP {response.status_code}); check model access, key, quota, and API settings.')
-            raw = bytearray()
-            for chunk in response.iter_content(65536):
-                raw.extend(chunk)
-                if len(raw) > 2_000_000: raise AIError('AI response exceeds the 2 MB limit.')
+        raw = _request_bytes(url, headers, body)
         result = json.loads(raw)
         if config.provider == 'gemini':
             candidate = result['candidates'][0]
@@ -102,7 +160,7 @@ def request_editorial(payload, config):
         match = re.fullmatch(r'\s*```(?:json)?\s*([\s\S]*?)\s*```\s*', text)
         return json.loads(match.group(1) if match else text)
     except requests.RequestException:
-        raise AIError('AI service connection failed; check network access and TLS configuration. No automatic retry was attempted.') from None
+        raise AIError('AI service connection failed; check network access and TLS configuration. Network failures are not automatically retried.') from None
     except (KeyError, IndexError, ValueError, TypeError):
         raise AIError('AI returned an unsupported response or invalid JSON. Nothing will be delivered.') from None
 

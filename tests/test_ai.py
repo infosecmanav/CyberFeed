@@ -20,9 +20,11 @@ def sample():
 
 
 class Response:
-    def __init__(self,data,status=200):self.raw=json.dumps(data).encode();self.status_code=status
+    def __init__(self,data,status=200,headers=None):
+        self.raw=json.dumps(data).encode();self.status_code=status
+        self.headers=headers or {};self.closed=False
     def __enter__(self):return self
-    def __exit__(self,*args):pass
+    def __exit__(self,*args):self.closed=True
     def iter_content(self,size):yield self.raw
 
 
@@ -83,17 +85,84 @@ def test_gemini_native_headers_schema_and_json_response(configured):
     assert request_editorial(p,c)==o
 
 
-@pytest.mark.parametrize('status',[302,401,403,429,500])
+@pytest.mark.parametrize('status',[302,400,401,403,404,408,429,501])
 def test_api_http_failures_are_sanitized_and_not_retried(configured,status):
     post=Mock(return_value=Response({'secret':'private-test-key'},status));configured.setattr('cyberbrief.ai.requests.post',post)
     with pytest.raises(AIError,match=str(status)) as e:request_editorial(sample()[0],AIConfig.from_env())
     assert 'private-test-key' not in str(e.value) and post.call_count==1
 
 
+@pytest.mark.parametrize('provider',['gemini','groq'])
+@pytest.mark.parametrize('status',[500,502,503,504])
+def test_transient_failure_retries_same_request_then_succeeds(configured,provider,status,caplog):
+    p,o=sample();configured.setenv('AI_PROVIDER',provider)
+    if provider=='gemini':
+        success={'candidates':[{'finishReason':'STOP','content':{'parts':[{'text':json.dumps(o)}]}}]}
+    else:
+        success={'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]}
+    responses=[Response({'error':'private-test-key'},status),Response({},status),Response(success)]
+    post=Mock(side_effect=responses);waits=[]
+    def sleep(delay):
+        assert responses[len(waits)].closed
+        waits.append(delay)
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    assert request_editorial(p,AIConfig.from_env())==o
+    assert waits==[10,20] and post.call_count==3
+    assert post.call_args_list[0]==post.call_args_list[1]==post.call_args_list[2]
+    assert 'private-test-key' not in caplog.text
+    assert f'HTTP {status}' in caplog.text and 'attempt 3/3' in caplog.text
+
+
+@pytest.mark.parametrize('status',[500,502,503,504])
+def test_transient_failures_stop_after_three_attempts(configured,status,caplog):
+    post=Mock(side_effect=[Response({'error':'private-test-key'},status) for _ in range(3)])
+    sleep=Mock();configured.setattr('cyberbrief.ai.requests.post',post)
+    configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    with pytest.raises(AIError,match=f'HTTP {status}.*3 attempt') as error:
+        request_editorial(sample()[0],AIConfig.from_env())
+    assert post.call_count==3 and [call.args[0] for call in sleep.call_args_list]==[10,20]
+    assert 'private-test-key' not in str(error.value)+caplog.text
+
+
+@pytest.mark.parametrize('retry_after,delay',[('30',30),('0',10),('-1',10),('invalid',10),('60',60),('Thu, 01 Jan 1970 00:17:20 GMT',40)])
+def test_retry_after_respected_within_bounded_wait(configured,retry_after,delay):
+    _,o=sample()
+    post=Mock(side_effect=[Response({},503,{'Retry-After':retry_after}),Response({'choices':[{'finish_reason':'stop','message':{'content':json.dumps(o)}}]})])
+    sleep=Mock();configured.setattr('cyberbrief.ai.requests.post',post)
+    configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    configured.setattr('cyberbrief.ai.time.time',lambda:1000)
+    assert request_editorial(sample()[0],AIConfig.from_env())==o
+    sleep.assert_called_once_with(delay)
+
+
+@pytest.mark.parametrize('retry_after',['120','Thu, 01 Jan 1970 00:20:00 GMT'])
+def test_long_retry_after_stops_without_retrying_early(configured,retry_after):
+    post=Mock(return_value=Response({},503,{'Retry-After':retry_after}));sleep=Mock()
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    configured.setattr('cyberbrief.ai.time.time',lambda:1000)
+    with pytest.raises(AIError,match='longer than 60 seconds'):
+        request_editorial(sample()[0],AIConfig.from_env())
+    assert post.call_count==1
+    sleep.assert_not_called()
+
+
+@pytest.mark.parametrize('failure',[Response({},401),Response({},429),Response({'invalid':'response'}),requests.ReadTimeout('private-test-key')])
+def test_retry_stops_on_permanent_or_ambiguous_failure(configured,failure):
+    post=Mock(side_effect=[Response({},503),failure]);sleep=Mock()
+    configured.setattr('cyberbrief.ai.requests.post',post)
+    configured.setattr('cyberbrief.ai.time.sleep',sleep)
+    with pytest.raises(AIError) as error:request_editorial(sample()[0],AIConfig.from_env())
+    assert post.call_count==2 and 'private-test-key' not in str(error.value)
+    sleep.assert_called_once_with(10)
+
+
 def test_connection_failure_never_exposes_request_key(configured):
-    configured.setattr('cyberbrief.ai.requests.post',Mock(side_effect=requests.ConnectionError('private-test-key')))
+    post=Mock(side_effect=requests.ConnectionError('private-test-key'))
+    configured.setattr('cyberbrief.ai.requests.post',post)
     with pytest.raises(AIError) as e:request_editorial(sample()[0],AIConfig.from_env())
-    assert 'private-test-key' not in str(e.value)
+    assert 'private-test-key' not in str(e.value) and post.call_count==1
 
 
 def test_incomplete_or_non_json_response_is_rejected(configured):
