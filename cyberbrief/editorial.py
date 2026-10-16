@@ -45,75 +45,100 @@ def fact_tokens(text):
     return {match.upper() for match in re.findall(r'\bCVE-\d{4}-\d{4,7}\b|\b\d+(?:\.[0-9A-Za-z]+)+\b', text, re.I)}
 
 
+class EditorialValidationError(ValueError):
+    """A precise validation failure containing no model-generated text."""
+
+    def __init__(self, code, path, message):
+        super().__init__(f'{path}: {message}')
+        self.issue = {'code': code, 'path': path, 'message': message}
+
+
 def validate(payload, summary):
-    if not isinstance(summary, dict) or not isinstance(summary.get('stories'), list):
-        raise ValueError('Expected a stories array')
-    if [s.get('id') for s in summary['stories']] != [s['id'] for s in payload['stories']]:
-        raise ValueError('Story IDs must match input order exactly')
-    for source, story in zip(payload['stories'],summary['stories']):
-        title = story.get('title')
-        if not isinstance(title,str) or not title.strip() or len(title)>140:
-            raise ValueError('Title must be nonempty and at most 140 characters')
-        bullets = story.get('bullets')
-        if not isinstance(bullets,list) or not 1<=len(bullets)<=5:
-            raise ValueError('Each story requires 1–5 supported bullets')
-        evidence = {e['id']:e['text'] for e in source['evidence']}
-        for bullet in bullets:
-            if bullet.get('kind') not in ('what','why','affected','action','exploitation'):
-                raise ValueError('Invalid bullet kind')
-            text,quote = bullet.get('text'),bullet.get('quote')
-            if not isinstance(text,str) or not text.strip() or not isinstance(quote,str) or not quote.strip():
-                raise ValueError('Bullets require text and exact evidence quotations')
-            if bullet.get('evidence_id') not in evidence or quote not in evidence[bullet['evidence_id']]:
-                raise ValueError('Evidence ID or quotation does not match the input')
-        allowed = fact_tokens(source['title']+' '+ ' '.join(e['text'] for e in source['evidence']))
-        if not fact_tokens(title).issubset(allowed):
-            raise ValueError('Title contains unsupported CVEs or versions')
-        for bullet in bullets:
-            if not fact_tokens(bullet['text']).issubset(fact_tokens(bullet['quote'])):
-                raise ValueError('Bullet contains CVEs or versions absent from its quotation')
-        if len((' '.join([title]+[b['text'] for b in bullets])).split())>120:
-            raise ValueError('Story exceeds 120-word editorial limit')
-        missing = story.get('missing',[])
-        if not isinstance(missing,list) or any(m not in ('versions','remediation','exploitation','workaround') for m in missing):
-            raise ValueError('Invalid missing-field list')
-    def cited(item, evidence):
+    def fail(code, path, message):
+        raise EditorialValidationError(code, path, message)
+
+    def object_entry(item, path):
+        if not isinstance(item, dict):
+            fail('invalid_object', path, 'Expected a JSON object')
+
+    def cited(item, evidence, path, *, bullet=False):
+        object_entry(item, path)
         text, quote = item.get('text'), item.get('quote')
         if not isinstance(text, str) or not text.strip() or not isinstance(quote, str) or not quote.strip():
-            raise ValueError('Editorial entries require text and exact quotations')
-        if item.get('evidence_id') not in evidence or quote not in evidence[item['evidence_id']]:
-            raise ValueError('Editorial citation or quotation does not match input')
+            fail('missing_text_or_quote', path, 'Editorial entries require text and exact quotations')
+        ident = item.get('evidence_id')
+        if not isinstance(ident, str) or ident not in evidence:
+            fail('unknown_evidence_id', path + '.evidence_id', 'Evidence ID must identify an evidence entry in this story')
+        if quote not in evidence[ident]:
+            fail('quotation_mismatch', path + '.quote', 'Evidence quotation must be an exact substring of the identified input text')
         if not fact_tokens(text).issubset(fact_tokens(quote)):
-            raise ValueError('Editorial text contains CVEs or versions absent from its quotation')
-    for source, story in zip(payload['stories'], summary['stories']):
+            message = 'Bullet contains CVEs or versions absent from its quotation' if bullet else 'Editorial text contains CVEs or versions absent from its quotation'
+            fail('unsupported_fact_token', path + '.text', message)
+
+    if not isinstance(summary, dict) or not isinstance(summary.get('stories'), list):
+        fail('missing_stories', 'stories', 'Expected a stories array')
+    for index, story in enumerate(summary['stories']):
+        object_entry(story, f'stories[{index}]')
+    if [s.get('id') for s in summary['stories']] != [s['id'] for s in payload['stories']]:
+        fail('story_id_mismatch', 'stories', 'Story IDs must match input order exactly')
+    for index, (source, story) in enumerate(zip(payload['stories'],summary['stories'])):
+        path = f'stories[{index}]'
+        title = story.get('title')
+        if not isinstance(title,str) or not title.strip() or len(title)>140:
+            fail('title_length', path + '.title', 'Title must be nonempty and at most 140 characters')
+        bullets = story.get('bullets')
+        if not isinstance(bullets,list) or not 1<=len(bullets)<=5:
+            fail('bullet_count', path + '.bullets', 'Each story requires 1–5 supported bullets')
+        evidence = {e['id']:e['text'] for e in source['evidence']}
+        for item_index, bullet in enumerate(bullets):
+            item_path = f'{path}.bullets[{item_index}]'
+            object_entry(bullet, item_path)
+            if bullet.get('kind') not in ('what','why','affected','action','exploitation'):
+                fail('bullet_kind', item_path + '.kind', 'Invalid bullet kind')
+            cited(bullet, evidence, item_path, bullet=True)
+        allowed = fact_tokens(source['title']+' '+ ' '.join(e['text'] for e in source['evidence']))
+        if not fact_tokens(title).issubset(allowed):
+            fail('unsupported_title_token', path + '.title', 'Title contains unsupported CVEs or versions')
+        if len((' '.join([title]+[b['text'] for b in bullets])).split())>120:
+            fail('summary_word_limit', path + '.bullets', 'Story exceeds 120-word editorial limit')
+        missing = story.get('missing',[])
+        if not isinstance(missing,list) or any(m not in ('versions','remediation','exploitation','workaround') for m in missing):
+            fail('missing_fields', path + '.missing', 'Invalid missing-field list')
         details = story.get('details')
         if not isinstance(details, list) or not 1 <= len(details) <= 20:
-            raise ValueError('Detailed report requires 1–20 supported entries per story')
-        for item in details:
+            fail('detail_count', path + '.details', 'Detailed report requires 1–20 supported entries per story')
+        for item_index, item in enumerate(details):
+            item_path = f'{path}.details[{item_index}]'
+            object_entry(item, item_path)
             if item.get('section') not in ('context', 'affected', 'action', 'exploitation'):
-                raise ValueError('Invalid detailed report section')
-            cited(item, {e['id']: e['text'] for e in source['evidence']})
+                fail('detail_section', item_path + '.section', 'Invalid detailed report section')
+            cited(item, evidence, item_path)
         diagram = story.get('diagram')
         if diagram is not None:
             if not isinstance(diagram, dict) or not isinstance(diagram.get('nodes'), list) or not 2 <= len(diagram['nodes']) <= 6:
-                raise ValueError('Optional diagram requires 2–6 supported nodes')
+                fail('diagram_nodes', path + '.diagram.nodes', 'Optional diagram requires 2–6 supported nodes')
+            for item_index, node in enumerate(diagram['nodes']):
+                object_entry(node, f'{path}.diagram.nodes[{item_index}]')
             node_ids = [node.get('id') for node in diagram['nodes']]
             if any(not isinstance(n, str) or not n for n in node_ids) or len(set(node_ids)) != len(node_ids):
-                raise ValueError('Diagram node IDs must be nonempty and unique')
-            evidence = {e['id']: e['text'] for e in source['evidence']}
-            for node in diagram['nodes']:
-                cited(node, evidence)
+                fail('diagram_node_ids', path + '.diagram.nodes', 'Diagram node IDs must be nonempty and unique')
+            for item_index, node in enumerate(diagram['nodes']):
+                item_path = f'{path}.diagram.nodes[{item_index}]'
+                cited(node, evidence, item_path)
                 if len(node['text'].split()) > 18:
-                    raise ValueError('Diagram label exceeds 18 words')
+                    fail('diagram_label_length', item_path + '.text', 'Diagram label exceeds 18 words')
             edges = diagram.get('edges')
             if not isinstance(edges, list) or not 1 <= len(edges) <= 8:
-                raise ValueError('Diagram requires explicit supported relationships')
-            for edge in edges:
+                fail('diagram_edges', path + '.diagram.edges', 'Diagram requires explicit supported relationships')
+            for item_index, edge in enumerate(edges):
+                item_path = f'{path}.diagram.edges[{item_index}]'
+                object_entry(edge, item_path)
                 if edge.get('from') not in node_ids or edge.get('to') not in node_ids or edge['from'] == edge['to']:
-                    raise ValueError('Diagram edge references invalid nodes')
+                    fail('diagram_edge_nodes', item_path, 'Diagram edge references invalid nodes')
                 quote = edge.get('quote')
-                if not isinstance(quote, str) or not quote or edge.get('evidence_id') not in evidence or quote not in evidence[edge['evidence_id']]:
-                    raise ValueError('Diagram relationship requires matching evidence')
+                ident = edge.get('evidence_id')
+                if not isinstance(quote, str) or not quote or not isinstance(ident, str) or ident not in evidence or quote not in evidence[ident]:
+                    fail('diagram_edge_evidence', item_path + '.quote', 'Diagram relationship requires matching evidence')
     return summary
 
 

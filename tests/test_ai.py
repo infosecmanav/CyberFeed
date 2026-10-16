@@ -30,7 +30,7 @@ class Response:
 
 @pytest.fixture
 def configured(monkeypatch):
-    for name in ('AI_API_KEY','AI_PROVIDER','AI_MODEL','AI_BASE_URL','AI_JSON_MODE','AI_MAX_OUTPUT_TOKENS','AI_GEMINI_TRANSPORT'):
+    for name in ('AI_API_KEY','AI_PROVIDER','AI_MODEL','AI_BASE_URL','AI_JSON_MODE','AI_MAX_OUTPUT_TOKENS','AI_GEMINI_TRANSPORT','AI_REPAIR_ATTEMPTS'):
         monkeypatch.delenv(name,raising=False)
     monkeypatch.setenv('AI_API_KEY','private-test-key')
     monkeypatch.setenv('AI_PROVIDER','groq')
@@ -268,6 +268,7 @@ def test_generation_validates_before_rendering_and_never_falls_back(configured):
     assert 'Cyber Feed' in text and 'DESIGN PREVIEW' not in text
     bad=copy.deepcopy(o);bad['stories'][0]['bullets'][0]['quote']='invented quote'
     configured.setattr('cyberbrief.ai.request_editorial',lambda *a:bad)
+    configured.setattr('cyberbrief.ai.repair_editorial',lambda *a:bad)
     with pytest.raises(AIError,match='evidence checks'):generate(report)
 
 

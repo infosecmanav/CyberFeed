@@ -35,6 +35,8 @@ For each story, provide a short title and 1–5 supported bullets (normally 3–
 `kind`: `what`, `why`, `affected`, `action`, or `exploitation`.
 `details.section`: `context`, `affected`, `action`, or `exploitation`.
 `missing`: zero or more of `versions`, `remediation`, `exploitation`, `workaround`.
+Titles must be nonempty and at most 140 characters. Each story must have 1–5 bullets and 1–20 detailed entries. A detailed entry may contain as much supported explanation as needed; group related facts into entries while preserving complete supporting quotations. The title plus bullet text must total at most 120 words. These are validator requirements, not optional style targets.
+Copy every `quote` directly from one identified `evidence[].text` string. It must be an exact substring after JSON decoding: do not paraphrase, add ellipses, normalize punctuation, combine separate source passages, or replace internal whitespace. Preserve line breaks as JSON escapes when needed. `evidence_id` must be the complete evidence-entry ID from this story, such as `s1.remediation`, rather than a story ID or reference number.
 Optional `diagram`: `{"nodes":[{"id":"n1","text":"Supported step","evidence_id":"s1.summary","quote":"exact supporting quote"}],"edges":[{"from":"n1","to":"n2","evidence_id":"s1.summary","quote":"exact support for the relationship"}]}`. The abbreviated example shows the schema, not a valid single-node graph; actual diagrams require 2–6 nodes and at least one supported edge. Omit `diagram` entirely when unnecessary.
 Preserve input IDs and order; one output per input story. Do not add URLs or unsupported metadata. Quotes should be the shortest complete support, normally 8–40 words. Do not emit Markdown fences around the actual response.
 

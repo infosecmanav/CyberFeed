@@ -69,6 +69,7 @@ jobs:
           AI_MAX_OUTPUT_TOKENS: ${{ vars.AI_MAX_OUTPUT_TOKENS }}
           AI_JSON_MODE: ${{ vars.AI_JSON_MODE }}
           AI_GEMINI_TRANSPORT: ${{ vars.AI_GEMINI_TRANSPORT }}
+          AI_REPAIR_ATTEMPTS: ${{ vars.AI_REPAIR_ATTEMPTS }}
         run: |
           python - <<'PY'
           import os
@@ -92,7 +93,18 @@ jobs:
           AI_MAX_OUTPUT_TOKENS: ${{ vars.AI_MAX_OUTPUT_TOKENS }}
           AI_JSON_MODE: ${{ vars.AI_JSON_MODE }}
           AI_GEMINI_TRANSPORT: ${{ vars.AI_GEMINI_TRANSPORT }}
+          AI_REPAIR_ATTEMPTS: ${{ vars.AI_REPAIR_ATTEMPTS }}
         run: python -m cyberbrief.cli build --ai --period "$REPORT_PERIOD" --scheduled-window --format all --out site
+      - name: Save failed report diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: briefing-diagnostics-${{ github.run_id }}
+          path: |
+            site/source-report.json
+            site/validation-error.json
+          retention-days: 7
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ needs.schedule.outputs.period }}-briefing-${{ github.run_id }}

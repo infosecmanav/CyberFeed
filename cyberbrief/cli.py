@@ -36,10 +36,14 @@ def main():
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     if use_ai:
+        (out / 'validation-error.json').unlink(missing_ok=True)
         (out / 'source-report.json').write_text(json.dumps(data,indent=2),encoding='utf-8')
-        from .ai import generate
+        from .ai import AIValidationError, generate
         try:
             data = generate(data,config)
+        except AIValidationError as exc:
+            (out / 'validation-error.json').write_text(json.dumps(exc.issue, indent=2), encoding='utf-8')
+            raise SystemExit(str(exc)) from None
         except AIError as exc:
             raise SystemExit(str(exc)) from None
     if args.format in ('json', 'all'):
