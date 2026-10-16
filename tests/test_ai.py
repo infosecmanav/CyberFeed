@@ -30,11 +30,12 @@ class Response:
 
 @pytest.fixture
 def configured(monkeypatch):
-    for name in ('AI_API_KEY','AI_PROVIDER','AI_MODEL','AI_BASE_URL','AI_JSON_MODE','AI_MAX_OUTPUT_TOKENS','AI_GEMINI_TRANSPORT','AI_REPAIR_ATTEMPTS'):
+    for name in ('AI_API_KEY','AI_PROVIDER','AI_MODEL','AI_BASE_URL','AI_JSON_MODE','AI_MAX_OUTPUT_TOKENS','AI_GEMINI_TRANSPORT','AI_REPAIR_ATTEMPTS','AI_BATCH_SIZE'):
         monkeypatch.delenv(name,raising=False)
     monkeypatch.setenv('AI_API_KEY','private-test-key')
     monkeypatch.setenv('AI_PROVIDER','groq')
     monkeypatch.setenv('AI_MODEL','account-model')
+    monkeypatch.setenv('AI_BATCH_SIZE','10')
     return monkeypatch
 
 

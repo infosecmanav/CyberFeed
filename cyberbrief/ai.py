@@ -10,6 +10,7 @@ import time
 from urllib.parse import urlparse
 import requests
 from .editorial import EditorialValidationError, pack, validate
+from .ai_limits import GroqRateState, token_error_metrics
 
 ROOT = Path(__file__).resolve().parent.parent
 BASES = {'groq': 'https://api.groq.com/openai/v1', 'openrouter': 'https://openrouter.ai/api/v1', 'openai': 'https://api.openai.com/v1'}
@@ -86,6 +87,9 @@ def _provider_codes(response):
         error = json.loads(raw).get('error', {})
         code = error.get('status')
         codes = [code] if code in PROVIDER_STATUS_CODES else []
+        provider_code = error.get('code')
+        if isinstance(provider_code, str) and provider_code.upper() in {'REQUEST_TOO_LARGE', 'RATE_LIMIT_EXCEEDED', 'CONTEXT_LENGTH_EXCEEDED', 'INSUFFICIENT_QUOTA'}:
+            codes.append(provider_code.upper())
         details = error.get('details', [])
         if isinstance(details, list):
             for detail in details:
@@ -93,7 +97,13 @@ def _provider_codes(response):
                     reason = detail.get('reason')
                     if reason in PROVIDER_REASON_CODES and reason not in codes:
                         codes.append(reason)
-        return ' Provider code(s): ' + ', '.join(codes) + '.' if codes else ''
+        diagnostic = ' Provider code(s): ' + ', '.join(codes) + '.' if codes else ''
+        metrics = token_error_metrics(error.get('message'))
+        if 'limit' in metrics and 'requested' in metrics:
+            diagnostic += f" Reported token limit: {metrics['limit']}; requested: {metrics['requested']}."
+            if 'scope' in metrics:
+                diagnostic += ' Limit scope: ' + metrics['scope'] + '.'
+        return diagnostic
     except (requests.RequestException, ValueError, TypeError, AttributeError):
         return ''
 
@@ -112,14 +122,20 @@ def _http_error(status, attempts, response=None):
         return AIHTTPError(status, prefix + 'check AI_API_KEY and the account\'s access to the selected model.')
     if status == 429:
         return AIHTTPError(status, prefix + 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.')
+    if status == 413:
+        return AIHTTPError(status, prefix + 'request exceeds the provider\'s request-size or token budget. Use smaller batches or a lower per-update output budget.')
     return AIHTTPError(status, prefix + 'check model access and API settings.')
 
 
-def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS):
+def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS, rate_state=None):
     # Retry only explicit transient HTTP failures. Network/read failures may
     # follow a completed generation, so repeating them could consume more quota.
     for attempt in range(1, max_attempts + 1):
+        if rate_state is not None:
+            rate_state.wait(body)
         with requests.post(url, headers=headers, json=body, timeout=(10, 180), allow_redirects=False, stream=True) as response:
+            if rate_state is not None:
+                rate_state.observe(response.headers)
             status = response.status_code
             if 200 <= status < 300:
                 raw = bytearray()
@@ -151,6 +167,8 @@ class AIConfig:
     json_mode: bool = True
     gemini_transport: str = 'auto'
     repair_attempts: int = 1
+    batch_size: int = 10
+    _rate_state: GroqRateState = field(default_factory=GroqRateState, repr=False, compare=False)
 
     @classmethod
     def from_env(cls):
@@ -182,7 +200,7 @@ class AIConfig:
             if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment or port not in (None, 443):
                 raise AIError('AI_BASE_URL must be an HTTPS API base URL without credentials, query, or fragment.')
         try:
-            limit = int(os.getenv('AI_MAX_OUTPUT_TOKENS') or '16384')
+            limit = int(os.getenv('AI_MAX_OUTPUT_TOKENS') or ('4096' if provider == 'groq' else '16384'))
             if not 256 <= limit <= 65536: raise ValueError()
         except ValueError:
             raise AIError('AI_MAX_OUTPUT_TOKENS must be between 256 and 65536.') from None
@@ -195,15 +213,22 @@ class AIConfig:
             if repairs not in (0, 1): raise ValueError()
         except ValueError:
             raise AIError('AI_REPAIR_ATTEMPTS must be 0 or 1.') from None
-        return cls(provider, model, key, base, limit, mode == 'true', transport, repairs)
+        try:
+            batch_size = int(os.getenv('AI_BATCH_SIZE') or ('1' if provider == 'groq' else '10'))
+            if not 1 <= batch_size <= 10: raise ValueError()
+        except ValueError:
+            raise AIError('AI_BATCH_SIZE must be between 1 and 10.') from None
+        return cls(provider, model, key, base, limit, mode == 'true', transport, repairs, batch_size)
 
 
 def preflight(config):
     """Log effective non-secret settings and check native Gemini model metadata."""
-    settings = {'provider': config.provider, 'model': config.model, 'base_url': config.base_url}
+    settings = {'provider': config.provider, 'model': config.model, 'base_url': config.base_url,
+                'max_output_tokens': config.max_output_tokens, 'batch_size': config.batch_size,
+                'repair_attempts': config.repair_attempts}
     if config.provider == 'gemini':
         settings['gemini_transport'] = config.gemini_transport
-    safe = {name: value.replace(config.api_key, '[redacted]') if config.api_key else value
+    safe = {name: value.replace(config.api_key, '[redacted]') if isinstance(value, str) and config.api_key else value
             for name, value in settings.items()}
     print('AI configuration: ' + json.dumps(safe), flush=True)
     if config.provider == 'gemini':
@@ -270,7 +295,8 @@ def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS):
     # TLS verification stays enabled; transient HTTP retries are bounded.
     try:
         try:
-            raw = _request_bytes(url, headers, body, max_attempts=max_attempts)
+            raw = _request_bytes(url, headers, body, max_attempts=max_attempts,
+                                 rate_state=config._rate_state if config.provider == 'groq' else None)
         except AIHTTPError as native_error:
             if not native or config.gemini_transport != 'auto' or native_error.status not in ({404} | TRANSIENT_STATUSES):
                 raise
@@ -303,21 +329,29 @@ def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS):
         raise AIError('AI returned an unsupported response or invalid JSON. Nothing will be delivered.') from None
 
 
-def generate(report, config=None):
-    config = config or AIConfig.from_env()
-    if report.get('demo'):
-        raise AIError('Live AI generation is not enabled for fictional fixture reports.')
-    payload = pack(report, detail_level='full')
-    # Empty windows need no model call, but configuration is still required.
-    output = request_editorial(payload, config) if payload['stories'] else {'stories': []}
+def _generate_batch(payload, config):
+    try:
+        output = request_editorial(payload, config)
+    except AIHTTPError as error:
+        if error.status != 413:
+            raise
+        count = len(payload['stories'])
+        if count == 1:
+            raise AIHTTPError(413, f"Single update {payload['stories'][0]['id']} still exceeds the provider budget; no evidence was discarded. {error}") from None
+        LOGGER.warning('Provider rejected a batch of %s updates with HTTP 413; splitting it without truncating evidence.', count)
+        middle = count // 2
+        first = _generate_batch(dict(payload, stories=payload['stories'][:middle]), config)
+        second = _generate_batch(dict(payload, stories=payload['stories'][middle:]), config)
+        return {'stories': first['stories'] + second['stories']}
     for attempt in range(config.repair_attempts + 1):
         try:
             validate(payload, output)
             break
         except EditorialValidationError as error:
-            issue = error.issue
+            issue = dict(error.issue, story_ids=[story['id'] for story in payload['stories']])
         except (ValueError, TypeError, AttributeError, KeyError):
-            issue = {'code': 'invalid_structure', 'path': 'report', 'message': 'Report contains an invalid data structure'}
+            issue = {'code': 'invalid_structure', 'path': 'report', 'message': 'Report contains an invalid data structure',
+                     'story_ids': [story['id'] for story in payload['stories']]}
         if attempt == config.repair_attempts:
             raise AIValidationError(issue) from None
         LOGGER.warning('AI report rejected at %s [%s]: %s. Requesting one evidence-based correction.', issue['path'], issue['code'], issue['message'])
@@ -325,6 +359,24 @@ def generate(report, config=None):
             output = repair_editorial(payload, output, issue, config)
         except AIError as error:
             raise AIValidationError(issue, str(error)) from None
+    return output
+
+
+def generate(report, config=None):
+    config = config or AIConfig.from_env()
+    if report.get('demo'):
+        raise AIError('Live AI generation is not enabled for fictional fixture reports.')
+    payload = pack(report, detail_level='full')
+    output = {'stories': []}
+    # Empty windows require configuration but no generation calls.
+    for start in range(0, len(payload['stories']), config.batch_size):
+        batch = dict(payload, stories=payload['stories'][start:start + config.batch_size])
+        print(f"Generating AI updates {start + 1}–{start + len(batch['stories'])} of {len(payload['stories'])}.", flush=True)
+        output['stories'].extend(_generate_batch(batch, config)['stories'])
+    try:
+        validate(payload, output)
+    except EditorialValidationError as error:
+        raise AIValidationError(error.issue) from None
     data = dict(report)
     data['editorial'] = {'evidence': payload, 'report': output}
     data['ai'] = {'provider': config.provider, 'model': config.model, 'status': 'validated'}

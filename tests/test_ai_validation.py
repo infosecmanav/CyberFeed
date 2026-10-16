@@ -124,7 +124,7 @@ def test_http_failure_does_not_trigger_content_correction(monkeypatch):
 
 def test_cli_keeps_safe_diagnostics_and_never_creates_rejected_pdf(monkeypatch, tmp_path):
     payload, valid, rejected = sample()
-    for name, value in {'AI_API_KEY': 'private-test-key', 'AI_PROVIDER': 'groq', 'AI_MODEL': 'model', 'AI_REPAIR_ATTEMPTS': '1'}.items():
+    for name, value in {'AI_API_KEY': 'private-test-key', 'AI_PROVIDER': 'groq', 'AI_MODEL': 'model', 'AI_REPAIR_ATTEMPTS': '1', 'AI_BATCH_SIZE': '10'}.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv('AI_BASE_URL', raising=False)
     monkeypatch.setattr(cli, 'build', lambda *a, **k: source_report(payload))
