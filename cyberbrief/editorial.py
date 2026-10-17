@@ -1,5 +1,6 @@
 """Standalone editorial input/validation and design preview; not production delivery."""
 import argparse
+import copy
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -53,6 +54,66 @@ class EditorialValidationError(ValueError):
         self.issue = {'code': code, 'path': path, 'message': message}
 
 
+def evidence_passages(text):
+    """Partition source text losslessly into short, numbered citation passages."""
+    passages, current = [], ''
+    # Prefer sentence/newline boundaries. Keep every separator in the source.
+    for part in re.split(r'(?<=[.!?])(?=\s)|(?<=\n)', text):
+        if len(current) + len(part) > 600 and current:
+            passages.append(current)
+            current = ''
+        while len(part) > 600:
+            end = part.rfind(' ', 0, 600)
+            if end <= 0:
+                end = 600
+            passages.append(part[:end])
+            part = part[end:]
+        current += part
+    if current:
+        passages.append(current)
+    return {f'p{index}': passage for index, passage in enumerate(passages, 1)}
+
+
+def citation_payload(payload):
+    """Send source passages once, rather than asking an AI to copy quotations."""
+    packet = copy.deepcopy(payload)
+    for story in packet['stories']:
+        for evidence in story['evidence']:
+            evidence['passages'] = evidence_passages(evidence.pop('text'))
+    return packet
+
+
+def resolve_citations(payload, summary):
+    """Resolve explicit passage IDs; never guess, normalize, or repair a quote."""
+    resolved = copy.deepcopy(summary)
+    for index, (source, story) in enumerate(zip(payload['stories'], resolved['stories'])):
+        sources = {e['id']: evidence_passages(e['text']) for e in source['evidence']}
+        groups = [(name, story.get(name)) for name in ('bullets', 'details')]
+        if isinstance(story.get('diagram'), dict):
+            groups.extend(('diagram.' + name, story['diagram'].get(name)) for name in ('nodes', 'edges'))
+        for name, items in groups:
+            if not isinstance(items, list):
+                continue
+            for item_index, item in enumerate(items):
+                if not isinstance(item, dict) or 'quote_ids' not in item:
+                    continue
+                path = f'stories[{index}].{name}[{item_index}]'
+                ident, selected = item.get('evidence_id'), item['quote_ids']
+                if not isinstance(ident, str) or ident not in sources:
+                    raise EditorialValidationError('unknown_evidence_id', path + '.evidence_id', 'Evidence ID must identify an evidence entry in this story')
+                passages = sources[ident]
+                if not isinstance(selected, list) or not selected or len(selected) > len(passages) or any(not isinstance(key, str) or key not in passages for key in selected):
+                    raise EditorialValidationError('unknown_passage_id', path + '.quote_ids', 'Quote IDs must select existing passages from the identified evidence entry')
+                positions = [int(key[1:]) for key in selected]
+                if positions != list(range(positions[0], positions[0] + len(positions))):
+                    raise EditorialValidationError('noncontiguous_passages', path + '.quote_ids', 'Select consecutive passages in their source order without duplicates')
+                quote = ''.join(passages[key] for key in selected)
+                if 'quote' in item and item['quote'] != quote:
+                    raise EditorialValidationError('conflicting_citation', path + '.quote', 'Quotation must match the selected source passages exactly')
+                item['quote'] = quote
+    return resolved
+
+
 def validate(payload, summary):
     def fail(code, path, message):
         raise EditorialValidationError(code, path, message)
@@ -81,6 +142,7 @@ def validate(payload, summary):
         object_entry(story, f'stories[{index}]')
     if [s.get('id') for s in summary['stories']] != [s['id'] for s in payload['stories']]:
         fail('story_id_mismatch', 'stories', 'Story IDs must match input order exactly')
+    summary = resolve_citations(payload, summary)
     for index, (source, story) in enumerate(zip(payload['stories'],summary['stories'])):
         path = f'stories[{index}]'
         title = story.get('title')
@@ -169,7 +231,7 @@ def diagram_drawing(diagram, width, accent, ink, background):
 
 
 def render(payload, summary, theme='dark', *, preview=True):
-    validate(payload,summary)
+    summary = validate(payload,summary)
     if theme not in ('dark','light'): raise ValueError('Choose dark or light')
     from reportlab.lib import colors
     from reportlab.lib.styles import ParagraphStyle
