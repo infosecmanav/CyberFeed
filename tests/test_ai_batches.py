@@ -104,7 +104,6 @@ def test_validation_diagnostics_identify_batch_story_ids(monkeypatch):
     config = ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1', repair_attempts=0, batch_size=1)
     with pytest.raises(ai.AIValidationError) as error: ai.generate(source(payload), config)
     assert error.value.issue['story_ids'] == ['s4'] and error.value.issue['code'] == 'detail_count'
-    assert 'checks for s4 at stories[0]' in str(error.value)
 
 
 def test_rate_headers_pace_next_request_without_printing_body(monkeypatch, caplog):

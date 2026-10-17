@@ -8,7 +8,7 @@ import pytest
 from pypdf import PdfReader
 
 from cyberbrief import ai, cli
-from cyberbrief.editorial import EditorialValidationError, citation_payload, validate
+from cyberbrief.editorial import EditorialValidationError, validate
 from cyberbrief.reports import pdf_report
 
 
@@ -78,7 +78,7 @@ def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monke
     assert post.call_count == 2 and result['ai']['status'] == 'validated'
     correction = post.call_args.kwargs['json']['messages']
     packet = json.loads(correction[1]['content'])
-    assert packet['original_evidence'] == citation_payload(payload)
+    assert packet['original_evidence'] == payload
     assert packet['rejected_report'] == rejected
     assert packet['validation_error']['path'] == 'stories[0].bullets[0].quote'
     assert 'Specific correction request' in correction[0]['content']
@@ -156,5 +156,5 @@ def test_oversized_correction_stops_before_api_call(monkeypatch):
     call = Mock(); monkeypatch.setattr(ai, 'request_json', call)
     config = ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1')
     with pytest.raises(ai.AIError, match='1 MB'):
-        ai.repair_editorial({'stories': [{'evidence': [{'id': 's1.summary', 'text': 'x' * 1_000_000}]}]}, {}, {'code': 'invalid_structure'}, config)
+        ai.repair_editorial({'source': 'x' * 1_000_000}, {}, {'code': 'invalid_structure'}, config)
     call.assert_not_called()
