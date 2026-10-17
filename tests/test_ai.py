@@ -105,6 +105,48 @@ def test_provider_error_codes_are_useful_without_printing_error_bodies(configure
     assert post.call_count==1
 
 
+def test_groq_json_generation_failure_is_identified_without_exposing_draft(configured):
+    body = {'error': {'code': 'json_validate_failed', 'type': 'invalid_request_error',
+                      'message': 'private-test-key and private provider details',
+                      'failed_generation': 'untrusted draft with private-test-key'}}
+    post = Mock(return_value=Response(body, 400))
+    configured.setattr('cyberbrief.ai.requests.post', post)
+    with pytest.raises(AIError) as error:
+        request_editorial(sample()[0], AIConfig.from_env())
+    message = str(error.value)
+    assert 'JSON_VALIDATE_FAILED' in message
+    assert 'invalid_request_error' in message
+    assert 'model failed to produce JSON' in message
+    assert 'private' not in message and 'untrusted draft' not in message
+    assert 'check model access' not in message and post.call_count == 1
+
+
+def test_rejected_request_parameter_is_identified(configured):
+    post = Mock(return_value=Response({'error': {'code': 'unsupported_parameter',
+                                                'param': 'response_format',
+                                                'type': 'invalid_request_error'}}, 400))
+    configured.setattr('cyberbrief.ai.requests.post', post)
+    with pytest.raises(AIError) as error:
+        request_editorial(sample()[0], AIConfig.from_env())
+    assert 'UNSUPPORTED_PARAMETER' in str(error.value)
+    assert 'Rejected parameter: response_format' in str(error.value)
+    assert post.call_count == 1
+
+
+@pytest.mark.parametrize('error', [
+    {'code': 'private-test-key', 'type': 'private-test-key', 'param': 'private-test-key'},
+    {'code': ['private-test-key'], 'type': {'key': 'private-test-key'}, 'param': ['private-test-key']},
+])
+def test_unknown_or_malformed_error_metadata_is_not_echoed(configured, error):
+    configured.setattr('cyberbrief.ai.requests.post', Mock(return_value=Response({'error': error}, 400)))
+    with pytest.raises(AIError) as failure:
+        request_editorial(sample()[0], AIConfig.from_env())
+    assert 'HTTP 400' in str(failure.value)
+    assert 'private-test-key' not in str(failure.value)
+    assert 'Provider error type:' not in str(failure.value)
+    assert 'Rejected parameter:' not in str(failure.value)
+
+
 @pytest.mark.parametrize('error',[
     {'status':'private-test-key','message':'private-test-key','details':[{'reason':'private-test-key'}]},
     {'status':{'secret':'private-test-key'}},

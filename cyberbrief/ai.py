@@ -21,6 +21,9 @@ MAX_ATTEMPTS = 3
 MAX_RETRY_DELAY = 60
 PROVIDER_STATUS_CODES = frozenset({'CANCELLED', 'UNKNOWN', 'INVALID_ARGUMENT', 'DEADLINE_EXCEEDED', 'NOT_FOUND', 'ALREADY_EXISTS', 'PERMISSION_DENIED', 'RESOURCE_EXHAUSTED', 'FAILED_PRECONDITION', 'ABORTED', 'OUT_OF_RANGE', 'UNIMPLEMENTED', 'INTERNAL', 'UNAVAILABLE', 'DATA_LOSS', 'UNAUTHENTICATED'})
 PROVIDER_REASON_CODES = frozenset({'API_KEY_INVALID', 'API_KEY_EXPIRED', 'API_KEY_SERVICE_BLOCKED', 'API_KEY_HTTP_REFERRER_BLOCKED', 'API_KEY_IP_ADDRESS_BLOCKED', 'SERVICE_DISABLED', 'BILLING_DISABLED', 'CONSUMER_INVALID', 'ACCESS_TOKEN_SCOPE_INSUFFICIENT', 'RATE_LIMIT_EXCEEDED', 'RESOURCE_QUOTA_EXCEEDED', 'MODEL_NOT_FOUND', 'LOCATION_POLICY_VIOLATED'})
+COMPATIBLE_ERROR_CODES = frozenset({'REQUEST_TOO_LARGE', 'RATE_LIMIT_EXCEEDED', 'CONTEXT_LENGTH_EXCEEDED', 'INSUFFICIENT_QUOTA', 'JSON_VALIDATE_FAILED', 'TOOL_USE_FAILED', 'MODEL_NOT_FOUND', 'MODEL_DECOMMISSIONED', 'INVALID_API_KEY', 'UNSUPPORTED_PARAMETER', 'INVALID_VALUE'})
+PROVIDER_ERROR_TYPES = frozenset({'invalid_request_error', 'tokens', 'requests', 'authentication_error', 'permission_error', 'server_error'})
+REQUEST_PARAMETERS = frozenset({'model', 'messages', 'response_format', 'max_tokens', 'max_completion_tokens', 'reasoning_effort', 'temperature', 'stream'})
 
 
 class AIError(RuntimeError):
@@ -88,7 +91,7 @@ def _provider_codes(response):
         code = error.get('status')
         codes = [code] if code in PROVIDER_STATUS_CODES else []
         provider_code = error.get('code')
-        if isinstance(provider_code, str) and provider_code.upper() in {'REQUEST_TOO_LARGE', 'RATE_LIMIT_EXCEEDED', 'CONTEXT_LENGTH_EXCEEDED', 'INSUFFICIENT_QUOTA'}:
+        if isinstance(provider_code, str) and provider_code.upper() in COMPATIBLE_ERROR_CODES:
             codes.append(provider_code.upper())
         details = error.get('details', [])
         if isinstance(details, list):
@@ -98,6 +101,14 @@ def _provider_codes(response):
                     if reason in PROVIDER_REASON_CODES and reason not in codes:
                         codes.append(reason)
         diagnostic = ' Provider code(s): ' + ', '.join(codes) + '.' if codes else ''
+        error_type = error.get('type')
+        if isinstance(error_type, str) and error_type in PROVIDER_ERROR_TYPES:
+            diagnostic += ' Provider error type: ' + error_type + '.'
+        parameter = error.get('param')
+        if isinstance(parameter, str) and parameter in REQUEST_PARAMETERS:
+            diagnostic += ' Rejected parameter: ' + parameter + '.'
+        if 'JSON_VALIDATE_FAILED' in codes:
+            diagnostic += ' The model failed to produce JSON accepted by the provider; no report was accepted or delivered.'
         metrics = token_error_metrics(error.get('message'))
         if 'limit' in metrics and 'requested' in metrics:
             diagnostic += f" Reported token limit: {metrics['limit']}; requested: {metrics['requested']}."
@@ -124,6 +135,8 @@ def _http_error(status, attempts, response=None):
         return AIHTTPError(status, prefix + 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.')
     if status == 413:
         return AIHTTPError(status, prefix + 'request exceeds the provider\'s request-size or token budget. Use smaller batches or a lower per-update output budget.')
+    if status == 400:
+        return AIHTTPError(status, prefix + 'the provider rejected the request or generated output. Check the provider code and rejected parameter above; HTTP 400 alone does not identify the cause.')
     return AIHTTPError(status, prefix + 'check model access and API settings.')
 
 
