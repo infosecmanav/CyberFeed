@@ -1,6 +1,6 @@
 # Editorial design preview
 
-These ten historical source-backed updates demonstrate the black-and-blue layout. Detailed sections retain all supplied technical facts without a fixed word limit. Summary bullets remain short. Each update starts on a new page and has its own a. AI summary, b. detailed AI-powered report, and c. references. There is no shared summary or shared reference section. Diagrams are optional; none is forced into this sample. Sparse extracts are explicitly marked as incomplete rather than padded with unsupported claims. Summaries were prepared during this review, without calling an external AI API. They are not a newly fetched daily report. The standard AI generation path now uses this layout. These files remain historical review samples.
+These ten historical source-backed updates demonstrate the black-and-blue layout. Detailed sections retain all supplied technical facts without a fixed word limit. Summary bullets remain short. Each update starts on a new page and has its own a. Summary, b. Detailed Reports (powered by AI), and c. References. There is no shared summary or shared reference section. Diagrams are optional; none is forced into this sample. Sparse extracts are explicitly marked as incomplete rather than padded with unsupported claims. Summaries were prepared during this review, without calling an external AI API. They are not a newly fetched daily report. The standard AI generation path now uses this layout. These files remain historical review samples.
 
 - [Dark PDF](dark.pdf)
 - [Light PDF](light.pdf)

@@ -43,13 +43,13 @@ def test_preview_pdf_preserves_summary_links_and_missing_fields(theme):
     assert any(page.get('/Annots') for page in reader.pages)
     assert len(reader.pages)>=10
     assert len(p['stories']) == 10
-    assert text.count('a. AI summary') == 10
-    assert text.count('b. Detailed AI-powered report') == 10
+    assert text.count('a. Summary') == 10
+    assert text.count('b. Detailed Reports (powered by AI)') == 10
     assert text.count('c. References') == 10
     cursor = 0
     for _ in p['stories']:
-        a = text.index('a. AI summary',cursor)
-        b = text.index('b. Detailed AI-powered report',a)
+        a = text.index('a. Summary',cursor)
+        b = text.index('b. Detailed Reports (powered by AI)',a)
         c = text.index('c. References',b)
         assert a < b < c
         cursor = c + len('c. References')

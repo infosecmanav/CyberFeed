@@ -228,9 +228,9 @@ Without `--scheduled-window`, reports use rolling windows of 36 hours for daily 
 
 The AI report repeats the following structure **for each update**:
 
-**a. AI summary** — concise, evidence-supported bullets.
+**a. Summary** — concise, evidence-supported bullets.
 
-**b. Detailed AI-powered report** — relevant technical facts, prerequisites, affected versions, exploitation evidence, patches, and workarounds. Detail has no arbitrary word target; missing facts are marked explicitly, and repetition or unsupported expansion is excluded.
+**b. Detailed Reports (powered by AI)** — relevant technical facts, prerequisites, affected versions, exploitation evidence, patches, and workarounds. Detail has no arbitrary word target; missing facts are marked explicitly, and repetition or unsupported expansion is excluded.
 
 **c. References** — the update's source links, dates where supplied, and inline citations.
 

@@ -137,9 +137,9 @@ def editorial_sections(data):
         def citation(item):
             number = next((n for n,r in enumerate(refs,1) if 'KEV' in r['source']),1) if item['evidence_id'].endswith('.kev') else 1
             return f' [{index}.{number}]'
-        yield 'a. AI summary'
+        yield 'a. Summary'
         for bullet in story['bullets']: yield '• '+bullet['text']+citation(bullet)
-        yield 'b. Detailed AI-powered report'
+        yield 'b. Detailed Reports (powered by AI)'
         for item in story['details']: yield labels[item['section']]+': '+item['text']+citation(item)
         if story.get('diagram'):
             yield 'Optional diagram relationships'

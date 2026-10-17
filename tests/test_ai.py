@@ -264,7 +264,7 @@ def test_generation_validates_before_rendering_and_never_falls_back(configured):
     configured.setattr('cyberbrief.ai.request_editorial',lambda *a:o)
     d=generate(report);assert d['ai']['status']=='validated'
     assert 'private-test-key' not in json.dumps(d)
-    text='\n'.join(sections(d));assert text.count('a. AI summary')==10 and text.count('c. References')==10
+    text='\n'.join(sections(d));assert text.count('a. Summary')==10 and text.count('c. References')==10
     reader=PdfReader(BytesIO(pdf_report(d)));text='\n'.join(page.extract_text() for page in reader.pages)
     assert 'Cyber Feed' in text and 'DESIGN PREVIEW' not in text
     bad=copy.deepcopy(o);bad['stories'][0]['bullets'][0]['quote']='invented quote'
@@ -290,7 +290,7 @@ def test_cli_requires_ai_by_default_and_exports_validated_reports(configured,tmp
     configured.setattr('sys.argv',['cli','build','--format','all','--out',str(tmp_path)])
     cli.main()
     assert json.loads((tmp_path/'briefing.json').read_text())['ai']['status']=='validated'
-    assert 'Detailed AI-powered report' in (tmp_path/'briefing.txt').read_text()
+    assert 'Detailed Reports (powered by AI)' in (tmp_path/'briefing.txt').read_text()
     assert (tmp_path/'briefing.pdf').read_bytes().startswith(b'%PDF-')
     assert 'ai' not in json.loads((tmp_path/'source-report.json').read_text())
 

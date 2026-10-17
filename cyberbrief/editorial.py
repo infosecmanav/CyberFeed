@@ -196,14 +196,14 @@ def render(payload, summary, theme='dark', *, preview=True):
     for index,(source,story) in enumerate(zip(payload['stories'],summary['stories']),1):
         if index > 1:
             flow.append(PageBreak())
-        content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10]),meta),Paragraph('a. AI summary',heading)]
+        content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10]),meta),Paragraph('a. Summary',heading)]
         references = source.get('references') or [{'source':source['source'],'url':source['url']}]
         def citation(item):
             ref = next((i for i,r in enumerate(references,1) if 'KEV' in r['source']),1) if item['evidence_id'].endswith('.kev') else 1
             return f' [{index}.{ref}]'
         for bullet in story['bullets']:
             content.append(Paragraph('• '+escape(bullet['text'])+citation(bullet),body))
-        content.append(Paragraph('b. Detailed AI-powered report',heading))
+        content.append(Paragraph('b. Detailed Reports (powered by AI)',heading))
         last_section = None
         for item in story['details']:
             label = f'<font color="{accent.hexval()}">{labels[item["section"]]}</font><br/>' if item['section'] != last_section else ''
