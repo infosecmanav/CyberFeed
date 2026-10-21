@@ -17,11 +17,11 @@ on:
           - text
         default: pdf
   schedule:
-    # Toronto daily 08:50; Friday weekly 08:30. Gate selects the DST slot.
-    - cron: '50 12 * * *'
-    - cron: '50 13 * * *'
-    - cron: '30 12 * * 5'
-    - cron: '30 13 * * 5'
+    # GitHub cron is best-effort and has recently arrived several hours late.
+    # Early probes cover 02:50-09:50 Toronto across DST; the gate waits for the
+    # requested local time and a cache lock prevents duplicate delivery.
+    - cron: '50 6-13 * * *'
+    - cron: '30 6-13 * * 5'
 permissions:
   contents: read
 concurrency:
@@ -33,6 +33,8 @@ jobs:
     outputs:
       enabled: ${{ steps.gate.outputs.enabled }}
       period: ${{ steps.gate.outputs.period }}
+      delivery_key: ${{ steps.gate.outputs.delivery_key }}
+      already_delivered: ${{ steps.delivered.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@v4
       - name: Select Toronto morning slot
@@ -41,9 +43,17 @@ jobs:
           REPORT_PERIOD: ${{ inputs.period || 'daily' }}
           SCHEDULE_EXPRESSION: ${{ github.event.schedule }}
         run: python3 -m cyberbrief.schedule
+      - name: Check whether this report was already delivered
+        id: delivered
+        if: steps.gate.outputs.enabled == 'true' && github.event_name == 'schedule'
+        uses: actions/cache/restore@v4
+        with:
+          path: .delivery-state
+          key: ${{ steps.gate.outputs.delivery_key }}
+          lookup-only: true
   deliver:
     needs: schedule
-    if: needs.schedule.outputs.enabled == 'true'
+    if: needs.schedule.outputs.enabled == 'true' && needs.schedule.outputs.already_delivered != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -118,3 +128,16 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPORT_FORMAT: ${{ inputs.format || vars.BRIEFING_FORMAT || 'pdf' }}
         run: python -m cyberbrief.webhook --out site --format "$REPORT_FORMAT"
+      - name: Record successful scheduled delivery
+        if: github.event_name == 'schedule'
+        env:
+          DELIVERY_KEY: ${{ needs.schedule.outputs.delivery_key }}
+        run: |
+          mkdir -p .delivery-state
+          touch ".delivery-state/$DELIVERY_KEY"
+      - name: Save scheduled delivery lock
+        if: github.event_name == 'schedule'
+        uses: actions/cache/save@v4
+        with:
+          path: .delivery-state
+          key: ${{ needs.schedule.outputs.delivery_key }}

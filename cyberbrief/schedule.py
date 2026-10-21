@@ -4,19 +4,26 @@ import os
 from zoneinfo import ZoneInfo
 
 TORONTO = ZoneInfo('America/Toronto')
-SLOTS = {'50 12 * * *': ('daily', time(8, 50)), '50 13 * * *': ('daily', time(8, 50)),
-         '30 12 * * 5': ('weekly', time(8, 30)), '30 13 * * 5': ('weekly', time(8, 30))}
+DAILY_SCHEDULE = '50 6-13 * * *'
+WEEKLY_SCHEDULE = '30 6-13 * * 5'
+SCHEDULES = {DAILY_SCHEDULE: ('daily', time(8, 50)),
+             WEEKLY_SCHEDULE: ('weekly', time(8, 30))}
 
 
 def gate(event, expression, period='daily', now=None):
     if event == 'workflow_dispatch':
         return True, period
-    if event != 'schedule' or expression not in SLOTS:
+    if event != 'schedule' or expression not in SCHEDULES:
         return False, period
     local = (now or datetime.now(timezone.utc)).astimezone(TORONTO)
-    selected, clock = SLOTS[expression]
-    target = datetime.combine(local.date(), clock, tzinfo=TORONTO).astimezone(timezone.utc)
-    return int(expression.split()[1]) == target.hour, selected
+    selected, clock = SCHEDULES[expression]
+    # GitHub's scheduled-event service can be delayed by hours. Several early
+    # probes are configured in the workflow; only a probe that reaches the
+    # local delivery time is eligible. A workflow cache key prevents duplicates.
+    enabled = local.time().replace(tzinfo=None) >= clock
+    if selected == 'weekly':
+        enabled = enabled and local.weekday() == 4
+    return enabled, selected
 
 
 def should_run(event, expression, now=None):
@@ -40,7 +47,15 @@ def report_window(period, now=None):
     return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
 
 
+def delivery_key(period, now=None):
+    """Stable cache key for one successful delivery per report window."""
+    _, end = report_window(period, now)
+    return f'cyber-feed-delivered-{period}-{end.astimezone(TORONTO).date().isoformat()}'
+
+
 if __name__ == '__main__':
-    enabled, period = gate(os.getenv('GITHUB_EVENT_NAME'), os.getenv('SCHEDULE_EXPRESSION'), os.getenv('REPORT_PERIOD', 'daily'))
+    now = datetime.now(timezone.utc)
+    enabled, period = gate(os.getenv('GITHUB_EVENT_NAME'), os.getenv('SCHEDULE_EXPRESSION'), os.getenv('REPORT_PERIOD', 'daily'), now)
     with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
-        output.write('enabled=' + str(enabled).lower() + '\nperiod=' + period + '\n')
+        output.write('enabled=' + str(enabled).lower() + '\nperiod=' + period +
+                     '\ndelivery_key=' + delivery_key(period, now) + '\n')

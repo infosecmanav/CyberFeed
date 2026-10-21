@@ -53,29 +53,58 @@ def test_demo_or_untrusted_destination_cannot_be_sent(tmp_path,monkeypatch):
     post.assert_not_called()
 
 
-@pytest.mark.parametrize('date,active,inactive', [('2026-07-01T12:00:00+00:00','50 12 * * *','50 13 * * *'),('2026-12-01T13:00:00+00:00','50 13 * * *','50 12 * * *'),('2026-03-08T12:00:00+00:00','50 12 * * *','50 13 * * *'),('2026-11-01T13:00:00+00:00','50 13 * * *','50 12 * * *')])
-def test_schedule_summer_winter_and_transition_days(date,active,inactive):
+@pytest.mark.parametrize('date,expected', [('2026-07-01T12:49:00+00:00',False),
+                                           ('2026-07-01T12:50:00+00:00',True),
+                                           ('2026-12-01T13:49:00+00:00',False),
+                                           ('2026-12-01T13:50:00+00:00',True),
+                                           ('2026-03-08T12:50:00+00:00',True),
+                                           ('2026-11-01T13:50:00+00:00',True)])
+def test_schedule_summer_winter_and_transition_days(date,expected):
     from datetime import datetime
-    from cyberbrief.schedule import should_run
+    from cyberbrief.schedule import DAILY_SCHEDULE,should_run
     now=datetime.fromisoformat(date)
-    assert should_run('schedule',active,now)
-    assert not should_run('schedule',inactive,now)
+    assert should_run('schedule',DAILY_SCHEDULE,now) is expected
     assert should_run('workflow_dispatch','',now)
 
 
 def test_schedule_does_not_skip_delayed_matching_slot():
     from datetime import datetime
-    from cyberbrief.schedule import should_run
-    assert should_run('schedule','50 12 * * *',datetime.fromisoformat('2026-07-01T13:10:00+00:00'))
-    assert not should_run('push','50 12 * * *')
+    from cyberbrief.schedule import DAILY_SCHEDULE,should_run
+    assert should_run('schedule',DAILY_SCHEDULE,datetime.fromisoformat('2026-07-01T13:10:00+00:00'))
+    assert not should_run('schedule',DAILY_SCHEDULE,datetime.fromisoformat('2026-07-01T11:10:00+00:00'))
+    assert not should_run('push',DAILY_SCHEDULE)
 
 
-@pytest.mark.parametrize('date,expression,expected', [('2026-07-03T12:30:00+00:00','30 12 * * 5',True),('2026-07-03T13:30:00+00:00','30 13 * * 5',False),('2026-12-04T13:30:00+00:00','30 13 * * 5',True),('2026-12-04T12:30:00+00:00','30 12 * * 5',False)])
-def test_weekly_dst_gate(date,expression,expected):
+@pytest.mark.parametrize('date,expected', [('2026-07-03T12:30:00+00:00',True),
+                                           ('2026-07-03T12:29:00+00:00',False),
+                                           ('2026-12-04T13:30:00+00:00',True),
+                                           ('2026-12-04T13:29:00+00:00',False),
+                                           ('2026-07-04T12:30:00+00:00',False)])
+def test_weekly_dst_gate(date,expected):
     from datetime import datetime
-    from cyberbrief.schedule import gate
-    enabled,period=gate('schedule',expression,now=datetime.fromisoformat(date))
+    from cyberbrief.schedule import WEEKLY_SCHEDULE,gate
+    enabled,period=gate('schedule',WEEKLY_SCHEDULE,now=datetime.fromisoformat(date))
     assert enabled==expected and period=='weekly'
+
+
+def test_delivery_keys_follow_completed_toronto_windows():
+    from datetime import datetime
+    from cyberbrief.schedule import delivery_key
+    before=datetime.fromisoformat('2026-11-01T13:49:00+00:00')
+    after=datetime.fromisoformat('2026-11-01T13:50:00+00:00')
+    assert delivery_key('daily',before).endswith('2026-10-31')
+    assert delivery_key('daily',after).endswith('2026-11-01')
+    assert delivery_key('weekly',after).endswith('2026-10-30')
+
+
+def test_workflow_has_early_fallbacks_and_success_only_delivery_lock():
+    from pathlib import Path
+    workflow=(Path(__file__).resolve().parent.parent/'.github/workflows/briefing.yml').read_text()
+    assert "cron: '50 6-13 * * *'" in workflow
+    assert "cron: '30 6-13 * * 5'" in workflow
+    assert 'actions/cache/restore@v4' in workflow and 'lookup-only: true' in workflow
+    assert workflow.index('Send report to Discord') < workflow.index('Record successful scheduled delivery')
+    assert 'actions/cache/save@v4' in workflow
 
 
 def test_friday_thursday_week_and_dst_boundary():

@@ -77,7 +77,9 @@ Friday includes both deliveries. Manual daily runs use the last completed 8:50 A
 
 Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml), with timezone selection and coverage boundaries in [cyberbrief/schedule.py](cyberbrief/schedule.py). Changes to delivery times must keep those definitions consistent.
 
-GitHub scheduled workflows run from the default branch and may be delayed. Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
+GitHub scheduled workflows run from the default branch and may be delayed. To reduce multi-hour delays, the workflow submits several early hourly probes and accepts the first one that reaches the Toronto delivery time. A small Actions cache key is saved only after Discord confirms delivery, preventing later probes from sending the same report twice. If generation or delivery fails, a later probe can retry. This improves reliability but cannot give GitHub's best-effort scheduler an exact-time guarantee.
+
+Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
 
 ## Configuration
 
