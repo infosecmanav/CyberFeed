@@ -1,13 +1,11 @@
-"""Toronto delivery slots and explicit report windows, including DST changes."""
+"""Fixed UTC delivery slots and explicit UTC report windows."""
 from datetime import datetime, time, timedelta, timezone
 import os
-from zoneinfo import ZoneInfo
 
-TORONTO = ZoneInfo('America/Toronto')
 DAILY_SCHEDULE = '50 6-13 * * *'
 WEEKLY_SCHEDULE = '30 6-13 * * 5'
-SCHEDULES = {DAILY_SCHEDULE: ('daily', time(8, 50)),
-             WEEKLY_SCHEDULE: ('weekly', time(8, 30))}
+SCHEDULES = {DAILY_SCHEDULE: ('daily', time(12, 50)),
+             WEEKLY_SCHEDULE: ('weekly', time(12, 30))}
 
 
 def gate(event, expression, period='daily', now=None):
@@ -15,14 +13,14 @@ def gate(event, expression, period='daily', now=None):
         return True, period
     if event != 'schedule' or expression not in SCHEDULES:
         return False, period
-    local = (now or datetime.now(timezone.utc)).astimezone(TORONTO)
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     selected, clock = SCHEDULES[expression]
     # GitHub's scheduled-event service can be delayed by hours. Several early
-    # probes are configured in the workflow; only a probe that reaches the
-    # local delivery time is eligible. A workflow cache key prevents duplicates.
-    enabled = local.time().replace(tzinfo=None) >= clock
+    # probes are configured in the workflow; only a probe that reaches the UTC
+    # delivery time is eligible. A workflow cache key prevents duplicates.
+    enabled = current.time().replace(tzinfo=None) >= clock
     if selected == 'weekly':
-        enabled = enabled and local.weekday() == 4
+        enabled = enabled and current.weekday() == 4
     return enabled, selected
 
 
@@ -31,26 +29,26 @@ def should_run(event, expression, now=None):
 
 
 def report_window(period, now=None):
-    local = (now or datetime.now(timezone.utc)).astimezone(TORONTO)
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     if period == 'weekly':
-        # Last completed Friday-Thursday calendar week; Friday midnight is exclusive.
-        friday = local.date() - timedelta(days=(local.weekday()-4) % 7)
-        end = datetime.combine(friday, time(), tzinfo=TORONTO)
-        start = datetime.combine(friday-timedelta(days=7), time(), tzinfo=TORONTO)
+        # Last completed Friday-Thursday UTC week; Friday midnight is exclusive.
+        friday = current.date() - timedelta(days=(current.weekday()-4) % 7)
+        end = datetime.combine(friday, time(), tzinfo=timezone.utc)
+        start = datetime.combine(friday-timedelta(days=7), time(), tzinfo=timezone.utc)
     elif period == 'daily':
-        end = datetime.combine(local.date(), time(8, 50), tzinfo=TORONTO)
-        if local < end:
-            end = datetime.combine(local.date()-timedelta(days=1), time(8, 50), tzinfo=TORONTO)
-        start = datetime.combine(end.date()-timedelta(days=1), time(8, 50), tzinfo=TORONTO)
+        end = datetime.combine(current.date(), time(12, 50), tzinfo=timezone.utc)
+        if current < end:
+            end = datetime.combine(current.date()-timedelta(days=1), time(12, 50), tzinfo=timezone.utc)
+        start = end-timedelta(days=1)
     else:
         raise ValueError('Choose daily or weekly')
-    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+    return start, end
 
 
 def delivery_key(period, now=None):
     """Stable cache key for one successful delivery per report window."""
     _, end = report_window(period, now)
-    return f'cyber-feed-delivered-{period}-{end.astimezone(TORONTO).date().isoformat()}'
+    return f'cyber-feed-delivered-{period}-{end.date().isoformat()}'
 
 
 if __name__ == '__main__':

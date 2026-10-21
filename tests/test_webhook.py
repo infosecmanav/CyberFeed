@@ -55,11 +55,11 @@ def test_demo_or_untrusted_destination_cannot_be_sent(tmp_path,monkeypatch):
 
 @pytest.mark.parametrize('date,expected', [('2026-07-01T12:49:00+00:00',False),
                                            ('2026-07-01T12:50:00+00:00',True),
-                                           ('2026-12-01T13:49:00+00:00',False),
-                                           ('2026-12-01T13:50:00+00:00',True),
+                                           ('2026-12-01T12:49:00+00:00',False),
+                                           ('2026-12-01T12:50:00+00:00',True),
                                            ('2026-03-08T12:50:00+00:00',True),
-                                           ('2026-11-01T13:50:00+00:00',True)])
-def test_schedule_summer_winter_and_transition_days(date,expected):
+                                           ('2026-11-01T12:50:00+00:00',True)])
+def test_schedule_uses_fixed_utc_time(date,expected):
     from datetime import datetime
     from cyberbrief.schedule import DAILY_SCHEDULE,should_run
     now=datetime.fromisoformat(date)
@@ -77,21 +77,21 @@ def test_schedule_does_not_skip_delayed_matching_slot():
 
 @pytest.mark.parametrize('date,expected', [('2026-07-03T12:30:00+00:00',True),
                                            ('2026-07-03T12:29:00+00:00',False),
-                                           ('2026-12-04T13:30:00+00:00',True),
-                                           ('2026-12-04T13:29:00+00:00',False),
+                                           ('2026-12-04T12:30:00+00:00',True),
+                                           ('2026-12-04T12:29:00+00:00',False),
                                            ('2026-07-04T12:30:00+00:00',False)])
-def test_weekly_dst_gate(date,expected):
+def test_weekly_uses_fixed_utc_time(date,expected):
     from datetime import datetime
     from cyberbrief.schedule import WEEKLY_SCHEDULE,gate
     enabled,period=gate('schedule',WEEKLY_SCHEDULE,now=datetime.fromisoformat(date))
     assert enabled==expected and period=='weekly'
 
 
-def test_delivery_keys_follow_completed_toronto_windows():
+def test_delivery_keys_follow_completed_utc_windows():
     from datetime import datetime
     from cyberbrief.schedule import delivery_key
-    before=datetime.fromisoformat('2026-11-01T13:49:00+00:00')
-    after=datetime.fromisoformat('2026-11-01T13:50:00+00:00')
+    before=datetime.fromisoformat('2026-11-01T12:49:00+00:00')
+    after=datetime.fromisoformat('2026-11-01T12:50:00+00:00')
     assert delivery_key('daily',before).endswith('2026-10-31')
     assert delivery_key('daily',after).endswith('2026-11-01')
     assert delivery_key('weekly',after).endswith('2026-10-30')
@@ -107,17 +107,17 @@ def test_workflow_has_early_fallbacks_and_success_only_delivery_lock():
     assert 'actions/cache/save@v4' in workflow
 
 
-def test_friday_thursday_week_and_dst_boundary():
+def test_friday_thursday_week_and_daily_windows_are_fixed_utc():
     from datetime import datetime, timedelta
-    from cyberbrief.schedule import report_window,TORONTO
+    from cyberbrief.schedule import report_window
     start,end=report_window('weekly',datetime.fromisoformat('2026-10-16T12:30:00+00:00'))
-    assert start.astimezone(TORONTO).isoformat()=='2026-10-09T00:00:00-04:00'
-    assert end.astimezone(TORONTO).isoformat()=='2026-10-16T00:00:00-04:00'
-    start,end=report_window('weekly',datetime.fromisoformat('2026-11-06T13:30:00+00:00'))
-    assert end-start==timedelta(days=7,hours=1)
-    start,end=report_window('daily',datetime.fromisoformat('2026-11-01T13:50:00+00:00'))
-    assert end-start==timedelta(hours=25)
-    assert end.astimezone(TORONTO).hour==8 and end.astimezone(TORONTO).minute==50
+    assert start.isoformat()=='2026-10-09T00:00:00+00:00'
+    assert end.isoformat()=='2026-10-16T00:00:00+00:00'
+    start,end=report_window('weekly',datetime.fromisoformat('2026-11-06T12:30:00+00:00'))
+    assert end-start==timedelta(days=7)
+    start,end=report_window('daily',datetime.fromisoformat('2026-11-01T12:50:00+00:00'))
+    assert end-start==timedelta(hours=24)
+    assert end.hour==12 and end.minute==50
 
 
 def test_weekly_window_includes_friday_and_excludes_next_friday(monkeypatch):

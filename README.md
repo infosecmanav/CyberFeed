@@ -66,18 +66,18 @@ Manual runs begin immediately; delivery follows source collection, AI generation
 
 ## Report schedule
 
-All delivery times use **America/Toronto**, with daylight saving adjustments.
+All delivery times and coverage boundaries use **UTC**. The fixed UTC schedule does not move when Toronto enters or leaves daylight saving time.
 
 | Report | Delivery time | Coverage window |
 | --- | --- | --- |
-| Daily | Every day at **8:50 AM** | Previous local 8:50 AM through the current 8:50 AM, end exclusive |
-| Weekly | Friday at **8:30 AM** | Previous Friday 00:00 through Thursday, ending Friday 00:00 exclusive |
+| Daily | Every day at **12:50 UTC** | Previous 12:50 UTC through the current 12:50 UTC, end exclusive |
+| Weekly | Friday at **12:30 UTC** | Previous Friday 00:00 UTC through Thursday, ending Friday 00:00 UTC exclusive |
 
-Friday includes both deliveries. Manual daily runs use the last completed 8:50 AM cutoff; manual weekly runs use the most recently completed Friday–Thursday period.
+Friday includes both deliveries. Manual daily runs use the last completed 12:50 UTC cutoff; manual weekly runs use the most recently completed Friday–Thursday UTC period. In Toronto, delivery is at 8:50/8:30 during daylight time and 7:50/7:30 during standard time.
 
-Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml), with timezone selection and coverage boundaries in [cyberbrief/schedule.py](cyberbrief/schedule.py). Changes to delivery times must keep those definitions consistent.
+Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml), with UTC delivery gates and coverage boundaries in [cyberbrief/schedule.py](cyberbrief/schedule.py). Changes to delivery times must keep those definitions consistent.
 
-GitHub scheduled workflows run from the default branch and may be delayed. To reduce multi-hour delays, the workflow submits several early hourly probes and accepts the first one that reaches the Toronto delivery time. A small Actions cache key is saved only after Discord confirms delivery, preventing later probes from sending the same report twice. If generation or delivery fails, a later probe can retry. This improves reliability but cannot give GitHub's best-effort scheduler an exact-time guarantee.
+GitHub scheduled workflows run from the default branch and may be delayed. To reduce multi-hour delays, the workflow submits several early hourly UTC probes and accepts the first one that reaches the delivery time. A small Actions cache key is saved only after Discord confirms delivery, preventing later probes from sending the same report twice. If generation or delivery fails, a later probe can retry. This improves reliability but cannot give GitHub's best-effort scheduler an exact-time guarantee.
 
 Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
 
