@@ -9,7 +9,7 @@ import re
 import time
 from urllib.parse import urlparse
 import requests
-from .editorial import EditorialValidationError, pack, validate
+from .editorial import EditorialValidationError, normalize_editorial_labels, pack, validate
 from .ai_limits import GroqRateState, token_error_metrics
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -357,6 +357,7 @@ def _generate_batch(payload, config):
         second = _generate_batch(dict(payload, stories=payload['stories'][middle:]), config)
         return {'stories': first['stories'] + second['stories']}
     for attempt in range(config.repair_attempts + 1):
+        output = normalize_editorial_labels(output)
         try:
             validate(payload, output)
             break

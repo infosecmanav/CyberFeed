@@ -33,6 +33,7 @@ For each story, provide a short title and 1–5 supported bullets (normally 3–
 {"stories":[{"id":"s1","title":"Short factual title","bullets":[{"kind":"what","text":"Plain-language fact.","evidence_id":"s1.summary","quote":"exact supporting source quotation"}],"details":[{"section":"context","text":"Detailed supported explanation.","evidence_id":"s1.summary","quote":"exact support"}],"missing":["versions"]}]}
 ```
 `kind`: `what`, `why`, `affected`, `action`, or `exploitation`.
+Use `what` when no more specific bullet kind applies. Never create another kind value.
 `details.section`: `context`, `affected`, `action`, or `exploitation`.
 `missing`: zero or more of `versions`, `remediation`, `exploitation`, `workaround`.
 Titles must be nonempty and at most 140 characters. Each story must have 1–5 bullets and 1–20 detailed entries. A detailed entry may contain as much supported explanation as needed; group related facts into entries while preserving complete supporting quotations. The title plus bullet text must total at most 120 words. These are validator requirements, not optional style targets.

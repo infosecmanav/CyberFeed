@@ -89,6 +89,29 @@ def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monke
     assert 'unsupported quotation' not in text
 
 
+def test_invalid_non_rendered_bullet_kind_is_normalized_without_correction(monkeypatch):
+    payload, valid, _ = sample()
+    invalid = copy.deepcopy(valid)
+    original = copy.deepcopy(invalid['stories'][0]['bullets'][0])
+    invalid['stories'][0]['bullets'][0]['kind'] = 'impact'
+    with pytest.raises(EditorialValidationError, match='Invalid bullet kind'):
+        validate(payload, invalid)
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(return_value=Response(invalid))
+    monkeypatch.setattr(ai.requests, 'post', post)
+    config = ai.AIConfig('groq', 'openai/gpt-oss-120b', 'private-test-key',
+                         'https://api.groq.com/openai/v1')
+
+    result = ai.generate(source_report(payload), config)
+
+    bullet = result['editorial']['report']['stories'][0]['bullets'][0]
+    assert post.call_count == 1
+    assert bullet['kind'] == 'what'
+    assert {key: bullet[key] for key in ('text', 'evidence_id', 'quote')} == {
+        key: original[key] for key in ('text', 'evidence_id', 'quote')}
+    validate(payload, result['editorial']['report'])
+
+
 @pytest.mark.parametrize('repairs', [0, 1])
 def test_invalid_output_never_passes_and_corrections_are_bounded(monkeypatch, repairs):
     payload, _, rejected = sample()

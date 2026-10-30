@@ -1,5 +1,6 @@
 """Standalone editorial input/validation and design preview; not production delivery."""
 import argparse
+import copy
 import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -9,6 +10,23 @@ from io import BytesIO
 from xml.sax.saxutils import escape, quoteattr
 
 BUDGETS = {'summary': 60, 'affected': 55, 'remediation': 85, 'workarounds': 45, 'exploitation': 40}
+BULLET_KINDS = frozenset({'what', 'why', 'affected', 'action', 'exploitation'})
+
+
+def normalize_editorial_labels(summary):
+    """Canonicalize non-rendered bullet labels without changing report claims."""
+    normalized = copy.deepcopy(summary)
+    if not isinstance(normalized, dict) or not isinstance(normalized.get('stories'), list):
+        return normalized
+    for story in normalized['stories']:
+        if not isinstance(story, dict) or not isinstance(story.get('bullets'), list):
+            continue
+        for bullet in story['bullets']:
+            if isinstance(bullet, dict) and bullet.get('kind') not in BULLET_KINDS:
+                # The renderer does not display this classification. Use the
+                # neutral category while leaving text and evidence untouched.
+                bullet['kind'] = 'what'
+    return normalized
 
 
 def pack(report, detail_level='full'):
@@ -93,7 +111,7 @@ def validate(payload, summary):
         for item_index, bullet in enumerate(bullets):
             item_path = f'{path}.bullets[{item_index}]'
             object_entry(bullet, item_path)
-            if bullet.get('kind') not in ('what','why','affected','action','exploitation'):
+            if bullet.get('kind') not in BULLET_KINDS:
                 fail('bullet_kind', item_path + '.kind', 'Invalid bullet kind')
             cited(bullet, evidence, item_path, bullet=True)
         allowed = fact_tokens(source['title']+' '+ ' '.join(e['text'] for e in source['evidence']))
