@@ -73,9 +73,12 @@ def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monke
     monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
     post = Mock(side_effect=[Response(rejected), Response(valid)])
     monkeypatch.setattr(ai.requests, 'post', post)
-    config = ai.AIConfig('groq', 'openai/gpt-oss-120b', 'private-test-key', 'https://api.groq.com/openai/v1')
+    config = ai.AIConfig('groq', 'openai/gpt-oss-120b', 'private-test-key',
+                         'https://api.groq.com/openai/v1', max_output_tokens=4096)
     result = ai.generate(source_report(payload), config)
     assert post.call_count == 2 and result['ai']['status'] == 'validated'
+    assert post.call_args_list[0].kwargs['json']['max_tokens'] == 4096
+    assert post.call_args_list[1].kwargs['json']['max_tokens'] == 2048
     correction = post.call_args.kwargs['json']['messages']
     packet = json.loads(correction[1]['content'])
     assert packet['original_evidence'] == payload
@@ -87,6 +90,20 @@ def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monke
     text = '\n'.join(page.extract_text() for page in PdfReader(BytesIO(pdf_report(result))).pages)
     assert text.count('References') == 10 and 'Cyber Feed' in text
     assert 'unsupported quotation' not in text
+
+
+def test_groq_correction_preserves_lower_user_output_limit(monkeypatch):
+    payload, valid, rejected = sample()
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(side_effect=[Response(rejected), Response(valid)])
+    monkeypatch.setattr(ai.requests, 'post', post)
+    config = ai.AIConfig('groq', 'model', 'private-test-key',
+                         'https://api.groq.com/openai/v1', max_output_tokens=1024)
+
+    ai.generate(source_report(payload), config)
+
+    assert post.call_args_list[0].kwargs['json']['max_tokens'] == 1024
+    assert post.call_args_list[1].kwargs['json']['max_tokens'] == 1024
 
 
 def test_invalid_non_rendered_bullet_kind_is_normalized_without_correction(monkeypatch):

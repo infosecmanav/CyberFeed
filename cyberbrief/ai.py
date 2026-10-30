@@ -19,6 +19,7 @@ LOGGER = logging.getLogger(__name__)
 TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
 MAX_ATTEMPTS = 3
 MAX_RETRY_DELAY = 60
+GROQ_CORRECTION_MAX_OUTPUT_TOKENS = 2048
 PROVIDER_STATUS_CODES = frozenset({'CANCELLED', 'UNKNOWN', 'INVALID_ARGUMENT', 'DEADLINE_EXCEEDED', 'NOT_FOUND', 'ALREADY_EXISTS', 'PERMISSION_DENIED', 'RESOURCE_EXHAUSTED', 'FAILED_PRECONDITION', 'ABORTED', 'OUT_OF_RANGE', 'UNIMPLEMENTED', 'INTERNAL', 'UNAVAILABLE', 'DATA_LOSS', 'UNAUTHENTICATED'})
 PROVIDER_REASON_CODES = frozenset({'API_KEY_INVALID', 'API_KEY_EXPIRED', 'API_KEY_SERVICE_BLOCKED', 'API_KEY_HTTP_REFERRER_BLOCKED', 'API_KEY_IP_ADDRESS_BLOCKED', 'SERVICE_DISABLED', 'BILLING_DISABLED', 'CONSUMER_INVALID', 'ACCESS_TOKEN_SCOPE_INSUFFICIENT', 'RATE_LIMIT_EXCEEDED', 'RESOURCE_QUOTA_EXCEEDED', 'MODEL_NOT_FOUND', 'LOCATION_POLICY_VIOLATED'})
 COMPATIBLE_ERROR_CODES = frozenset({'REQUEST_TOO_LARGE', 'RATE_LIMIT_EXCEEDED', 'CONTEXT_LENGTH_EXCEEDED', 'INSUFFICIENT_QUOTA', 'JSON_VALIDATE_FAILED', 'TOOL_USE_FAILED', 'MODEL_NOT_FOUND', 'MODEL_DECOMMISSIONED', 'INVALID_API_KEY', 'UNSUPPORTED_PARAMETER', 'INVALID_VALUE'})
@@ -286,14 +287,20 @@ def repair_editorial(payload, rejected, issue, config):
     if len(evidence.encode('utf-8')) > 1_000_000:
         raise AIError('Correction input exceeds the 1 MB limit; no additional request was sent.')
     # One correction request per interface; do not multiply provider retries here.
-    return request_json(config, instructions, evidence, max_attempts=1)
+    output_tokens = config.max_output_tokens
+    if config.provider == 'groq':
+        output_tokens = min(output_tokens, GROQ_CORRECTION_MAX_OUTPUT_TOKENS)
+    return request_json(config, instructions, evidence, max_attempts=1,
+                        max_output_tokens=output_tokens)
 
 
-def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS):
+def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS,
+                 max_output_tokens=None):
     """Generate JSON, optionally trying Google's second interface with its own key."""
+    output_tokens = config.max_output_tokens if max_output_tokens is None else max_output_tokens
     native = config.provider == 'gemini' and config.gemini_transport != 'openai-compatible'
     compatible_base = GEMINI_BASE + '/openai' if config.provider == 'gemini' else config.base_url
-    compatible_body = {'model': config.model, 'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': evidence}], 'max_tokens': config.max_output_tokens}
+    compatible_body = {'model': config.model, 'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': evidence}], 'max_tokens': output_tokens}
     if config.provider == 'openai':
         compatible_body['max_completion_tokens'] = compatible_body.pop('max_tokens')
     if config.json_mode:
@@ -301,7 +308,7 @@ def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS):
     if native:
         url = f'{GEMINI_BASE}/models/{config.model}:generateContent'
         headers = {'x-goog-api-key': config.api_key}
-        generation = {'maxOutputTokens': config.max_output_tokens}
+        generation = {'maxOutputTokens': output_tokens}
         if config.json_mode: generation['responseMimeType'] = 'application/json'
         body = {'systemInstruction': {'parts': [{'text': instructions}]}, 'contents': [{'role': 'user', 'parts': [{'text': evidence}]}], 'generationConfig': generation}
     else:
