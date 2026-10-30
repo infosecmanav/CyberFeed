@@ -35,6 +35,7 @@ For each story, provide a short title and 1–5 supported bullets (normally 3–
 `kind`: `what`, `why`, `affected`, `action`, or `exploitation`.
 Use `what` when no more specific bullet kind applies. Never create another kind value.
 `details.section`: `context`, `affected`, `action`, or `exploitation`.
+Use `context` when no more specific detailed-report section applies. Never create another section value.
 `missing`: zero or more of `versions`, `remediation`, `exploitation`, `workaround`.
 Titles must be nonempty and at most 140 characters. Each story must have 1–5 bullets and 1–20 detailed entries. A detailed entry may contain as much supported explanation as needed; group related facts into entries while preserving complete supporting quotations. The title plus bullet text must total at most 120 words. These are validator requirements, not optional style targets.
 Copy every `quote` directly from one identified `evidence[].text` string. It must be an exact substring after JSON decoding: do not paraphrase, add ellipses, normalize punctuation, combine separate source passages, or replace internal whitespace. Preserve line breaks as JSON escapes when needed. `evidence_id` must be the complete evidence-entry ID from this story, such as `s1.remediation`, rather than a story ID or reference number.

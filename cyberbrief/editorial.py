@@ -11,6 +11,15 @@ from xml.sax.saxutils import escape, quoteattr
 
 BUDGETS = {'summary': 60, 'affected': 55, 'remediation': 85, 'workarounds': 45, 'exploitation': 40}
 BULLET_KINDS = frozenset({'what', 'why', 'affected', 'action', 'exploitation'})
+DETAIL_SECTIONS = frozenset({'context', 'affected', 'action', 'exploitation'})
+DETAIL_SECTION_ALIASES = {
+    'what': 'context', 'why': 'context', 'impact': 'context', 'overview': 'context',
+    'background': 'context', 'scope': 'affected', 'versions': 'affected',
+    'affected_products': 'affected', 'affected_systems': 'affected',
+    'remediation': 'action', 'mitigation': 'action', 'recommendation': 'action',
+    'recommended_action': 'action', 'workaround': 'action', 'response': 'action',
+    'exploit': 'exploitation', 'exploitation_status': 'exploitation', 'status': 'exploitation',
+}
 
 
 def normalize_editorial_labels(summary):
@@ -19,13 +28,21 @@ def normalize_editorial_labels(summary):
     if not isinstance(normalized, dict) or not isinstance(normalized.get('stories'), list):
         return normalized
     for story in normalized['stories']:
-        if not isinstance(story, dict) or not isinstance(story.get('bullets'), list):
+        if not isinstance(story, dict):
             continue
-        for bullet in story['bullets']:
-            if isinstance(bullet, dict) and bullet.get('kind') not in BULLET_KINDS:
-                # The renderer does not display this classification. Use the
-                # neutral category while leaving text and evidence untouched.
-                bullet['kind'] = 'what'
+        if isinstance(story.get('bullets'), list):
+            for bullet in story['bullets']:
+                if isinstance(bullet, dict) and bullet.get('kind') not in BULLET_KINDS:
+                    # The renderer does not display this classification. Use the
+                    # neutral category while leaving text and evidence untouched.
+                    bullet['kind'] = 'what'
+        if isinstance(story.get('details'), list):
+            for detail in story['details']:
+                if not isinstance(detail, dict) or detail.get('section') in DETAIL_SECTIONS:
+                    continue
+                value = detail.get('section')
+                key = re.sub(r'[^a-z0-9]+', '_', value.strip().lower()).strip('_') if isinstance(value, str) else ''
+                detail['section'] = key if key in DETAIL_SECTIONS else DETAIL_SECTION_ALIASES.get(key, 'context')
     return normalized
 
 
@@ -128,7 +145,7 @@ def validate(payload, summary):
         for item_index, item in enumerate(details):
             item_path = f'{path}.details[{item_index}]'
             object_entry(item, item_path)
-            if item.get('section') not in ('context', 'affected', 'action', 'exploitation'):
+            if item.get('section') not in DETAIL_SECTIONS:
                 fail('detail_section', item_path + '.section', 'Invalid detailed report section')
             cited(item, evidence, item_path)
         diagram = story.get('diagram')
