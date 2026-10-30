@@ -118,7 +118,7 @@ def test_groq_json_generation_failure_retries_once_without_provider_json_mode(co
     assert post.call_count == 2
     assert post.call_args_list[0].kwargs['json']['response_format'] == {'type': 'json_object'}
     assert 'response_format' not in post.call_args_list[1].kwargs['json']
-    assert 'retrying this update once' in caplog.text
+    assert 'retrying this request once' in caplog.text
     assert 'private-test-key' not in caplog.text and 'untrusted draft' not in caplog.text
 
 

@@ -286,7 +286,8 @@ def repair_editorial(payload, rejected, issue, config):
                           ensure_ascii=False, separators=(',', ':'))
     if len(evidence.encode('utf-8')) > 1_000_000:
         raise AIError('Correction input exceeds the 1 MB limit; no additional request was sent.')
-    # One correction request per interface; do not multiply provider retries here.
+    # Do not retry transient correction failures. Groq may still receive one
+    # bounded transport fallback when its own JSON validator rejects output.
     output_tokens = config.max_output_tokens
     if config.provider == 'groq':
         output_tokens = min(output_tokens, GROQ_CORRECTION_MAX_OUTPUT_TOKENS)
@@ -322,9 +323,9 @@ def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS,
             raw = _request_bytes(url, headers, body, max_attempts=max_attempts,
                                  rate_state=config._rate_state if config.provider == 'groq' else None)
         except AIHTTPError as request_error:
-            if (config.provider == 'groq' and config.json_mode and max_attempts > 1 and
+            if (config.provider == 'groq' and config.json_mode and
                     'JSON_VALIDATE_FAILED' in request_error.provider_codes):
-                LOGGER.warning('Groq rejected its generated JSON; retrying this update once without provider-enforced JSON mode. Local schema and evidence validation remain enabled.')
+                LOGGER.warning('Groq rejected its generated JSON; retrying this request once without provider-enforced JSON mode. Local schema and evidence validation remain enabled.')
                 fallback_body = dict(body)
                 fallback_body.pop('response_format', None)
                 raw = _request_bytes(url, headers, fallback_body, max_attempts=1,

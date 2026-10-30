@@ -106,6 +106,31 @@ def test_groq_correction_preserves_lower_user_output_limit(monkeypatch):
     assert post.call_args_list[1].kwargs['json']['max_tokens'] == 1024
 
 
+def test_groq_correction_json_rejection_uses_bounded_local_validation_fallback(monkeypatch, caplog):
+    payload, valid, rejected = sample()
+    provider_rejection = {'error': {'code': 'json_validate_failed',
+                                    'type': 'invalid_request_error',
+                                    'message': 'private provider output'}}
+    rejected_response = Response({}, 400)
+    rejected_response.raw = json.dumps(provider_rejection).encode()
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(side_effect=[Response(rejected), rejected_response,
+                             Response(valid)])
+    monkeypatch.setattr(ai.requests, 'post', post)
+    config = ai.AIConfig('groq', 'model', 'private-test-key',
+                         'https://api.groq.com/openai/v1', max_output_tokens=4096)
+
+    result = ai.generate(source_report(payload), config)
+
+    assert result['ai']['status'] == 'validated'
+    assert post.call_count == 3
+    assert post.call_args_list[1].kwargs['json']['response_format'] == {'type': 'json_object'}
+    assert 'response_format' not in post.call_args_list[2].kwargs['json']
+    assert post.call_args_list[1].kwargs['json']['max_tokens'] == 2048
+    assert post.call_args_list[2].kwargs['json']['max_tokens'] == 2048
+    assert 'retrying this request once' in caplog.text
+
+
 def test_invalid_non_rendered_bullet_kind_is_normalized_without_correction(monkeypatch):
     payload, valid, _ = sample()
     invalid = copy.deepcopy(valid)
