@@ -105,20 +105,34 @@ def test_provider_error_codes_are_useful_without_printing_error_bodies(configure
     assert post.call_count==1
 
 
-def test_groq_json_generation_failure_is_identified_without_exposing_draft(configured):
+def test_groq_json_generation_failure_retries_once_without_provider_json_mode(configured, caplog):
+    _, output = sample()
     body = {'error': {'code': 'json_validate_failed', 'type': 'invalid_request_error',
                       'message': 'private-test-key and private provider details',
                       'failed_generation': 'untrusted draft with private-test-key'}}
+    success = {'choices': [{'finish_reason': 'stop',
+                            'message': {'content': '```json\n' + json.dumps(output) + '\n```'}}]}
+    post = Mock(side_effect=[Response(body, 400), Response(success)])
+    configured.setattr('cyberbrief.ai.requests.post', post)
+    assert request_editorial(sample()[0], AIConfig.from_env()) == output
+    assert post.call_count == 2
+    assert post.call_args_list[0].kwargs['json']['response_format'] == {'type': 'json_object'}
+    assert 'response_format' not in post.call_args_list[1].kwargs['json']
+    assert 'retrying this update once' in caplog.text
+    assert 'private-test-key' not in caplog.text and 'untrusted draft' not in caplog.text
+
+
+def test_groq_json_generation_fallback_is_bounded_and_sanitized(configured):
+    body = {'error': {'code': 'json_validate_failed', 'type': 'invalid_request_error',
+                      'message': 'private-test-key', 'failed_generation': 'private draft'}}
     post = Mock(return_value=Response(body, 400))
     configured.setattr('cyberbrief.ai.requests.post', post)
     with pytest.raises(AIError) as error:
         request_editorial(sample()[0], AIConfig.from_env())
     message = str(error.value)
-    assert 'JSON_VALIDATE_FAILED' in message
-    assert 'invalid_request_error' in message
-    assert 'model failed to produce JSON' in message
-    assert 'private' not in message and 'untrusted draft' not in message
-    assert 'check model access' not in message and post.call_count == 1
+    assert 'JSON_VALIDATE_FAILED' in message and 'invalid_request_error' in message
+    assert 'private-test-key' not in message and 'private draft' not in message
+    assert post.call_count == 2
 
 
 def test_rejected_request_parameter_is_identified(configured):

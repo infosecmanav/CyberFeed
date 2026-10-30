@@ -33,9 +33,10 @@ class AIError(RuntimeError):
 class AIHTTPError(AIError):
     """An HTTP failure whose status can guide bounded, provider-specific fallback."""
 
-    def __init__(self, status, message):
+    def __init__(self, status, message, provider_codes=()):
         super().__init__(message)
         self.status = status
+        self.provider_codes = frozenset(provider_codes)
         self.retry_delay = None
 
 
@@ -86,7 +87,7 @@ def _provider_codes(response):
         for chunk in response.iter_content(4096):
             raw.extend(chunk)
             if len(raw) > 16384:
-                return ''
+                return '', frozenset()
         error = json.loads(raw).get('error', {})
         code = error.get('status')
         codes = [code] if code in PROVIDER_STATUS_CODES else []
@@ -114,30 +115,33 @@ def _provider_codes(response):
             diagnostic += f" Reported token limit: {metrics['limit']}; requested: {metrics['requested']}."
             if 'scope' in metrics:
                 diagnostic += ' Limit scope: ' + metrics['scope'] + '.'
-        return diagnostic
+        return diagnostic, frozenset(codes)
     except (requests.RequestException, ValueError, TypeError, AttributeError):
-        return ''
+        return '', frozenset()
 
 
 def _http_error(status, attempts, response=None):
     prefix = f'AI request failed (HTTP {status}) after {attempts} attempt(s); '
+    provider_codes = frozenset()
     if response is not None:
-        codes = _provider_codes(response)
-        if codes:
-            prefix += codes.strip() + ' '
+        diagnostic, provider_codes = _provider_codes(response)
+        if diagnostic:
+            prefix += diagnostic.strip() + ' '
     if status in TRANSIENT_STATUSES:
-        return AIHTTPError(status, prefix + 'the provider is temporarily unavailable. Retry later or select another available model.')
-    if status == 404:
-        return AIHTTPError(status, prefix + 'check AI_MODEL and the provider\'s generation endpoint; the requested model or endpoint was not found.')
-    if status in (401, 403):
-        return AIHTTPError(status, prefix + 'check AI_API_KEY and the account\'s access to the selected model.')
-    if status == 429:
-        return AIHTTPError(status, prefix + 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.')
-    if status == 413:
-        return AIHTTPError(status, prefix + 'request exceeds the provider\'s request-size or token budget. Use smaller batches or a lower per-update output budget.')
-    if status == 400:
-        return AIHTTPError(status, prefix + 'the provider rejected the request or generated output. Check the provider code and rejected parameter above; HTTP 400 alone does not identify the cause.')
-    return AIHTTPError(status, prefix + 'check model access and API settings.')
+        suffix = 'the provider is temporarily unavailable. Retry later or select another available model.'
+    elif status == 404:
+        suffix = 'check AI_MODEL and the provider\'s generation endpoint; the requested model or endpoint was not found.'
+    elif status in (401, 403):
+        suffix = 'check AI_API_KEY and the account\'s access to the selected model.'
+    elif status == 429:
+        suffix = 'check the provider\'s rate limits and available quota. Rate-limit responses are not automatically retried.'
+    elif status == 413:
+        suffix = 'request exceeds the provider\'s request-size or token budget. Use smaller batches or a lower per-update output budget.'
+    elif status == 400:
+        suffix = 'the provider rejected the request or generated output. Check the provider code and rejected parameter above; HTTP 400 alone does not identify the cause.'
+    else:
+        suffix = 'check model access and API settings.'
+    return AIHTTPError(status, prefix + suffix, provider_codes)
 
 
 def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS, rate_state=None):
@@ -310,18 +314,26 @@ def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS):
         try:
             raw = _request_bytes(url, headers, body, max_attempts=max_attempts,
                                  rate_state=config._rate_state if config.provider == 'groq' else None)
-        except AIHTTPError as native_error:
-            if not native or config.gemini_transport != 'auto' or native_error.status not in ({404} | TRANSIENT_STATUSES):
+        except AIHTTPError as request_error:
+            if (config.provider == 'groq' and config.json_mode and max_attempts > 1 and
+                    'JSON_VALIDATE_FAILED' in request_error.provider_codes):
+                LOGGER.warning('Groq rejected its generated JSON; retrying this update once without provider-enforced JSON mode. Local schema and evidence validation remain enabled.')
+                fallback_body = dict(body)
+                fallback_body.pop('response_format', None)
+                raw = _request_bytes(url, headers, fallback_body, max_attempts=1,
+                                     rate_state=config._rate_state)
+            elif not native or config.gemini_transport != 'auto' or request_error.status not in ({404} | TRANSIENT_STATUSES):
                 raise
-            LOGGER.warning('Native Gemini generation returned HTTP %s; trying Google\'s OpenAI-compatible interface once with the same model and Gemini key.', native_error.status)
-            if native_error.retry_delay is not None:
-                LOGGER.warning('Honoring provider Retry-After: waiting %.0f seconds before the Google compatibility request.', native_error.retry_delay)
-                time.sleep(native_error.retry_delay)
-            try:
-                raw = _request_bytes(GEMINI_BASE + '/openai/chat/completions', {'Authorization': 'Bearer ' + config.api_key}, compatible_body, max_attempts=1)
-            except AIHTTPError as compatible_error:
-                raise AIError(f'Gemini generation failed through both Google interfaces. Native: {native_error} Compatibility: {compatible_error}') from None
-            native = False
+            else:
+                LOGGER.warning('Native Gemini generation returned HTTP %s; trying Google\'s OpenAI-compatible interface once with the same model and Gemini key.', request_error.status)
+                if request_error.retry_delay is not None:
+                    LOGGER.warning('Honoring provider Retry-After: waiting %.0f seconds before the Google compatibility request.', request_error.retry_delay)
+                    time.sleep(request_error.retry_delay)
+                try:
+                    raw = _request_bytes(GEMINI_BASE + '/openai/chat/completions', {'Authorization': 'Bearer ' + config.api_key}, compatible_body, max_attempts=1)
+                except AIHTTPError as compatible_error:
+                    raise AIError(f'Gemini generation failed through both Google interfaces. Native: {request_error} Compatibility: {compatible_error}') from None
+                native = False
         result = json.loads(raw)
         if native:
             candidate = result['candidates'][0]
