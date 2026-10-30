@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import pytest
 from pypdf import PdfReader
-from cyberbrief.editorial import pack,validate,render
+from cyberbrief.editorial import pack,source_fallback,validate,render
 from cyberbrief.engine import build
 
 
@@ -93,3 +93,18 @@ def test_full_evidence_preserves_details_that_compact_mode_omits():
     assert a['text']==text and '2.9.777' in a['text']
     assert '2.9.777' not in b['text']
     assert a['truncated']  # Upstream truncation remains visible.
+
+
+def test_source_fallback_is_complete_validated_and_visible_in_pdf():
+    payload, _ = sample()
+    output = source_fallback(payload, 'unsupported_fact_token')
+
+    validate(payload, output)
+    assert len(output['stories']) == len(payload['stories'])
+    assert all(story['generation'] == 'source_fallback' for story in output['stories'])
+    assert all(story['bullets'] and story['details'] for story in output['stories'])
+    reader = PdfReader(BytesIO(render(payload, output, preview=False)))
+    text = '\n'.join(page.extract_text() for page in reader.pages)
+    assert 'validated source fallback' in text.lower()
+    assert text.count('a. Summary') == len(payload['stories'])
+    assert text.count('c. References') == len(payload['stories'])

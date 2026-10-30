@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+import requests
 from pypdf import PdfReader
 
 from cyberbrief import ai, cli
@@ -42,6 +43,12 @@ def source_report(payload):
             'stories': [{} for _ in payload['stories']], 'errors': [], 'demo': False}
 
 
+def unsupported_report(valid):
+    rejected = copy.deepcopy(valid)
+    rejected['stories'][0]['bullets'][0]['text'] += ' CVE-2099-9999.'
+    return rejected
+
+
 def test_validation_failure_identifies_field_without_echoing_output():
     payload, _, rejected = sample()
     rejected['stories'][0]['bullets'][0]['quote'] = 'private-test-key'
@@ -69,7 +76,8 @@ def test_malformed_schema_has_safe_specific_failure(location, code):
 
 
 def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monkeypatch, caplog):
-    payload, valid, rejected = sample()
+    payload, valid, _ = sample()
+    rejected = unsupported_report(valid)
     monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
     post = Mock(side_effect=[Response(rejected), Response(valid)])
     monkeypatch.setattr(ai.requests, 'post', post)
@@ -82,8 +90,12 @@ def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monke
     correction = post.call_args.kwargs['json']['messages']
     packet = json.loads(correction[1]['content'])
     assert packet['original_evidence'] == payload
-    assert packet['rejected_report'] == rejected
-    assert packet['validation_error']['path'] == 'stories[0].bullets[0].quote'
+    rejected_bullet = packet['rejected_report']['stories'][0]['bullets'][0]
+    assert rejected_bullet['text'] == rejected['stories'][0]['bullets'][0]['text']
+    cited = next(entry['text'] for entry in payload['stories'][0]['evidence']
+                 if entry['id'] == rejected_bullet['evidence_id'])
+    assert rejected_bullet['quote'] == cited
+    assert packet['validation_error']['path'] == 'stories[0].bullets[0].text'
     assert 'Specific correction request' in correction[0]['content']
     assert 'private-test-key' not in json.dumps(correction)
     assert 'unsupported quotation' not in caplog.text
@@ -93,7 +105,8 @@ def test_groq_correction_produces_validated_pdf_without_weakening_evidence(monke
 
 
 def test_groq_correction_preserves_lower_user_output_limit(monkeypatch):
-    payload, valid, rejected = sample()
+    payload, valid, _ = sample()
+    rejected = unsupported_report(valid)
     monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
     post = Mock(side_effect=[Response(rejected), Response(valid)])
     monkeypatch.setattr(ai.requests, 'post', post)
@@ -107,7 +120,8 @@ def test_groq_correction_preserves_lower_user_output_limit(monkeypatch):
 
 
 def test_groq_correction_json_rejection_uses_bounded_local_validation_fallback(monkeypatch, caplog):
-    payload, valid, rejected = sample()
+    payload, valid, _ = sample()
+    rejected = unsupported_report(valid)
     provider_rejection = {'error': {'code': 'json_validate_failed',
                                     'type': 'invalid_request_error',
                                     'message': 'private provider output'}}
@@ -136,6 +150,8 @@ def test_invalid_non_rendered_bullet_kind_is_normalized_without_correction(monke
     invalid = copy.deepcopy(valid)
     original = copy.deepcopy(invalid['stories'][0]['bullets'][0])
     invalid['stories'][0]['bullets'][0]['kind'] = 'impact'
+    invalid['stories'][0]['generation'] = 'source_fallback'
+    invalid['stories'][0]['fallback_reason'] = 'model-controlled'
     with pytest.raises(EditorialValidationError, match='Invalid bullet kind'):
         validate(payload, invalid)
     monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
@@ -149,13 +165,57 @@ def test_invalid_non_rendered_bullet_kind_is_normalized_without_correction(monke
     bullet = result['editorial']['report']['stories'][0]['bullets'][0]
     assert post.call_count == 1
     assert bullet['kind'] == 'what'
+    assert 'generation' not in result['editorial']['report']['stories'][0]
+    assert 'fallback_reason' not in result['editorial']['report']['stories'][0]
     assert {key: bullet[key] for key in ('text', 'evidence_id', 'quote')} == {
         key: original[key] for key in ('text', 'evidence_id', 'quote')}
     validate(payload, result['editorial']['report'])
 
 
-def test_invalid_detail_section_after_correction_is_normalized(monkeypatch):
+def test_single_story_id_and_evidence_prefix_are_repaired_without_regeneration(monkeypatch):
+    payload, valid, _ = sample()
+    one_payload = dict(payload, stories=[copy.deepcopy(payload['stories'][6])])
+    one_output = {'stories': [copy.deepcopy(valid['stories'][6])]}
+    one_output['stories'][0]['id'] = 's1'
+    for collection in ('bullets', 'details'):
+        for item in one_output['stories'][0][collection]:
+            item['evidence_id'] = item['evidence_id'].replace('s7.', 's1.', 1)
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: one_payload)
+    post = Mock(return_value=Response(one_output))
+    monkeypatch.setattr(ai.requests, 'post', post)
+    config = ai.AIConfig('groq', 'model', 'private-test-key',
+                         'https://api.groq.com/openai/v1', batch_size=1)
+
+    result = ai.generate(source_report(one_payload), config)
+
+    story = result['editorial']['report']['stories'][0]
+    assert post.call_count == 1
+    assert story['id'] == 's7'
+    assert all(item['evidence_id'].startswith('s7.') for item in story['bullets'] + story['details'])
+    assert 'source_fallbacks' not in result['ai']
+    validate(one_payload, result['editorial']['report'])
+
+
+def test_inexact_model_quote_is_replaced_by_selected_source_evidence(monkeypatch):
     payload, valid, rejected = sample()
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(return_value=Response(rejected))
+    monkeypatch.setattr(ai.requests, 'post', post)
+
+    result = ai.generate(source_report(payload), ai.AIConfig(
+        'groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1'))
+
+    bullet = result['editorial']['report']['stories'][0]['bullets'][0]
+    evidence = {entry['id']: entry['text'] for entry in payload['stories'][0]['evidence']}
+    assert post.call_count == 1
+    assert bullet['quote'] == evidence[bullet['evidence_id']]
+    assert 'source_fallbacks' not in result['ai']
+    validate(payload, result['editorial']['report'])
+
+
+def test_invalid_detail_section_after_correction_is_normalized(monkeypatch):
+    payload, valid, _ = sample()
+    rejected = unsupported_report(valid)
     corrected = copy.deepcopy(valid)
     original = copy.deepcopy(corrected['stories'][0]['details'][0])
     corrected['stories'][0]['details'][0]['section'] = 'remediation'
@@ -179,39 +239,97 @@ def test_invalid_detail_section_after_correction_is_normalized(monkeypatch):
 
 @pytest.mark.parametrize('repairs', [0, 1])
 def test_invalid_output_never_passes_and_corrections_are_bounded(monkeypatch, repairs):
-    payload, _, rejected = sample()
-    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    payload, valid, _ = sample()
+    rejected = unsupported_report(valid)
     post = Mock(return_value=Response(rejected)); monkeypatch.setattr(ai.requests, 'post', post)
     config = ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1', repair_attempts=repairs)
-    with pytest.raises(ai.AIValidationError) as error: ai.generate(source_report(payload), config)
+    with pytest.raises(ai.AIValidationError) as error: ai._generate_batch(payload, config)
     assert post.call_count == repairs + 1
-    assert error.value.issue['code'] == 'quotation_mismatch'
-    assert 'stories[0].bullets[0].quote' in str(error.value)
+    assert error.value.issue['code'] == 'unsupported_fact_token'
+    assert 'stories[0].bullets[0].text' in str(error.value)
 
 
-def test_correction_quota_failure_stops_without_more_requests(monkeypatch):
-    payload, _, rejected = sample(); monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
-    post = Mock(side_effect=[Response(rejected), Response({}, 429)])
+@pytest.mark.parametrize('status', [413, 429])
+def test_correction_quota_failure_uses_validated_source_fallback(monkeypatch, status):
+    payload, valid, _ = sample(); rejected = unsupported_report(valid)
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(side_effect=[Response(rejected), Response({}, status)])
     monkeypatch.setattr(ai.requests, 'post', post)
     config = ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1')
-    with pytest.raises(ai.AIValidationError) as error: ai.generate(source_report(payload), config)
+    result = ai.generate(source_report(payload), config)
     assert post.call_count == 2
-    assert 'HTTP 429' in error.value.issue['correction_error']
-    assert 'private-test-key' not in str(error.value)
+    assert result['ai']['source_fallbacks'][0] == {'story_id': 's1', 'reason': 'unsupported_fact_token'}
+    assert result['editorial']['report']['stories'][0]['generation'] == 'source_fallback'
+    assert 'private-test-key' not in json.dumps(result)
+    validate(payload, result['editorial']['report'])
 
 
-def test_http_failure_does_not_trigger_content_correction(monkeypatch):
+def test_repeated_groq_json_rejection_uses_validated_source_fallback(monkeypatch):
+    payload, valid, _ = sample(); rejected = unsupported_report(valid)
+    provider_error = {'error': {'code': 'json_validate_failed',
+                                'type': 'invalid_request_error'}}
+    first = Response({}, 400); first.raw = json.dumps(provider_error).encode()
+    second = Response({}, 400); second.raw = json.dumps(provider_error).encode()
+    monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(side_effect=[Response(rejected), first, second])
+    monkeypatch.setattr(ai.requests, 'post', post)
+
+    result = ai.generate(source_report(payload), ai.AIConfig(
+        'groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1'))
+
+    assert post.call_count == 3
+    assert len(result['ai']['source_fallbacks']) == len(payload['stories'])
+    assert all(story['generation'] == 'source_fallback'
+               for story in result['editorial']['report']['stories'])
+    validate(payload, result['editorial']['report'])
+
+
+def test_invalid_success_response_uses_validated_source_fallback(monkeypatch):
+    payload, _, _ = sample(); monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    response = Response({})
+    response.raw = json.dumps({'choices': [{'finish_reason': 'stop',
+                                            'message': {'content': 'not json'}}]}).encode()
+    monkeypatch.setattr(ai.requests, 'post', Mock(return_value=response))
+
+    result = ai.generate(source_report(payload), ai.AIConfig(
+        'groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1'))
+
+    assert len(result['ai']['source_fallbacks']) == len(payload['stories'])
+    assert {item['reason'] for item in result['ai']['source_fallbacks']} == {'invalid_provider_output'}
+    validate(payload, result['editorial']['report'])
+
+
+def test_initial_rate_limit_uses_source_fallback_without_content_correction(monkeypatch):
     payload, _, _ = sample(); monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
     post = Mock(return_value=Response({}, 429)); correction = Mock()
     monkeypatch.setattr(ai.requests, 'post', post); monkeypatch.setattr(ai, 'repair_editorial', correction)
-    with pytest.raises(ai.AIHTTPError):
-        ai.generate(source_report(payload), ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1'))
+    result = ai.generate(source_report(payload), ai.AIConfig(
+        'groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1', batch_size=1))
     assert post.call_count == 1
     correction.assert_not_called()
+    assert len(result['ai']['source_fallbacks']) == len(payload['stories'])
+    assert {item['reason'] for item in result['ai']['source_fallbacks']} == {'provider_http_429'}
+    validate(payload, result['editorial']['report'])
 
 
-def test_cli_keeps_safe_diagnostics_and_never_creates_rejected_pdf(monkeypatch, tmp_path):
-    payload, valid, rejected = sample()
+def test_initial_connection_failure_uses_source_fallback_for_remaining_updates(monkeypatch):
+    payload, _, _ = sample(); monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
+    post = Mock(side_effect=requests.ConnectionError('private-test-key'))
+    monkeypatch.setattr(ai.requests, 'post', post)
+
+    result = ai.generate(source_report(payload), ai.AIConfig(
+        'groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1', batch_size=1))
+
+    assert post.call_count == 1
+    assert len(result['ai']['source_fallbacks']) == len(payload['stories'])
+    assert {item['reason'] for item in result['ai']['source_fallbacks']} == {'provider_unavailable'}
+    assert 'private-test-key' not in json.dumps(result)
+    validate(payload, result['editorial']['report'])
+
+
+def test_cli_replaces_rejected_ai_output_with_validated_source_report(monkeypatch, tmp_path):
+    payload, valid, _ = sample()
+    rejected = unsupported_report(valid)
     for name, value in {'AI_API_KEY': 'private-test-key', 'AI_PROVIDER': 'groq', 'AI_MODEL': 'model', 'AI_REPAIR_ATTEMPTS': '1', 'AI_BATCH_SIZE': '10'}.items():
         monkeypatch.setenv(name, value)
     monkeypatch.delenv('AI_BASE_URL', raising=False)
@@ -220,15 +338,16 @@ def test_cli_keeps_safe_diagnostics_and_never_creates_rejected_pdf(monkeypatch, 
     post = Mock(return_value=Response(rejected))
     monkeypatch.setattr(ai.requests, 'post', post)
     monkeypatch.setattr('sys.argv', ['cli', 'build', '--format', 'all', '--out', str(tmp_path)])
-    with pytest.raises(SystemExit, match='quotation_mismatch'): cli.main()
-    issue = json.loads((tmp_path / 'validation-error.json').read_text())
-    assert issue['path'] == 'stories[0].bullets[0].quote'
-    assert 'private-test-key' not in json.dumps(issue)
+    cli.main()
     assert (tmp_path / 'source-report.json').exists()
-    assert not (tmp_path / 'briefing.pdf').exists() and not (tmp_path / 'briefing.json').exists()
+    built = json.loads((tmp_path / 'briefing.json').read_text())
+    assert built['ai']['source_fallbacks'][0]['reason'] == 'unsupported_fact_token'
+    assert (tmp_path / 'briefing.pdf').read_bytes().startswith(b'%PDF-')
+    assert not (tmp_path / 'validation-error.json').exists()
     post.return_value = Response(valid)
     cli.main()
     assert not (tmp_path / 'validation-error.json').exists()
+    assert 'source_fallbacks' not in json.loads((tmp_path / 'briefing.json').read_text())['ai']
     assert (tmp_path / 'briefing.pdf').read_bytes().startswith(b'%PDF-')
 
 

@@ -9,7 +9,7 @@ import re
 import time
 from urllib.parse import urlparse
 import requests
-from .editorial import EditorialValidationError, normalize_editorial_labels, pack, validate
+from .editorial import EditorialValidationError, normalize_editorial_labels, pack, source_fallback, validate
 from .ai_limits import GroqRateState, token_error_metrics
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,6 +31,10 @@ class AIError(RuntimeError):
     """A safe-to-display failure: never contains keys or provider response bodies."""
 
 
+class AIOutputError(AIError):
+    """The provider responded, but its generated content cannot be consumed."""
+
+
 class AIHTTPError(AIError):
     """An HTTP failure whose status can guide bounded, provider-specific fallback."""
 
@@ -46,7 +50,7 @@ class AIValidationError(AIError):
 
     def __init__(self, issue, correction_error=None):
         self.issue = dict(issue)
-        message = f"AI output failed report structure or evidence checks at {issue['path']} [{issue['code']}]: {issue['message']}. Nothing will be delivered."
+        message = f"AI output failed report structure or evidence checks at {issue['path']} [{issue['code']}]: {issue['message']}. The AI draft was rejected."
         if correction_error:
             self.issue['correction_error'] = correction_error
             message += ' Correction request failed: ' + correction_error
@@ -160,7 +164,7 @@ def _request_bytes(url, headers, body, *, max_attempts=MAX_ATTEMPTS, rate_state=
                 for chunk in response.iter_content(65536):
                     raw.extend(chunk)
                     if len(raw) > 2_000_000:
-                        raise AIError('AI response exceeds the 2 MB limit.')
+                        raise AIOutputError('AI response exceeds the 2 MB limit.')
                 return raw
             delay = _retry_delay(response, attempt) if status in TRANSIENT_STATUSES else None
             if status in TRANSIENT_STATUSES and delay is None:
@@ -346,20 +350,20 @@ def request_json(config, instructions, evidence, *, max_attempts=MAX_ATTEMPTS,
         if native:
             candidate = result['candidates'][0]
             if candidate.get('finishReason') != 'STOP':
-                raise AIError('AI response did not finish successfully; check output-token budget and provider restrictions.')
+                raise AIOutputError('AI response did not finish successfully; check output-token budget and provider restrictions.')
             text = ''.join(p.get('text', '') for p in candidate['content']['parts'] if not p.get('thought'))
         else:
             choice = result['choices'][0]
             if choice.get('finish_reason') != 'stop':
-                raise AIError('AI response did not finish successfully; check output-token budget and provider restrictions.')
+                raise AIOutputError('AI response did not finish successfully; check output-token budget and provider restrictions.')
             text = choice['message']['content']
-        if not isinstance(text, str) or not text.strip(): raise AIError('AI returned no report text.')
+        if not isinstance(text, str) or not text.strip(): raise AIOutputError('AI returned no report text.')
         match = re.fullmatch(r'\s*```(?:json)?\s*([\s\S]*?)\s*```\s*', text)
         return json.loads(match.group(1) if match else text)
     except requests.RequestException:
         raise AIError('AI service connection failed; check network access and TLS configuration. Network failures are not automatically retried.') from None
     except (KeyError, IndexError, ValueError, TypeError, AttributeError):
-        raise AIError('AI returned an unsupported response or invalid JSON. Nothing will be delivered.') from None
+        raise AIOutputError('AI returned an unsupported response or invalid JSON.') from None
 
 
 def _generate_batch(payload, config):
@@ -377,7 +381,7 @@ def _generate_batch(payload, config):
         second = _generate_batch(dict(payload, stories=payload['stories'][middle:]), config)
         return {'stories': first['stories'] + second['stories']}
     for attempt in range(config.repair_attempts + 1):
-        output = normalize_editorial_labels(output)
+        output = normalize_editorial_labels(output, payload)
         try:
             validate(payload, output)
             break
@@ -402,11 +406,48 @@ def generate(report, config=None):
         raise AIError('Live AI generation is not enabled for fictional fixture reports.')
     payload = pack(report, detail_level='full')
     output = {'stories': []}
+    fallback_records = []
+    provider_failure = None
     # Empty windows require configuration but no generation calls.
     for start in range(0, len(payload['stories']), config.batch_size):
         batch = dict(payload, stories=payload['stories'][start:start + config.batch_size])
         print(f"Generating AI updates {start + 1}–{start + len(batch['stories'])} of {len(payload['stories'])}.", flush=True)
-        output['stories'].extend(_generate_batch(batch, config)['stories'])
+        story_ids = [story['id'] for story in batch['stories']]
+        if provider_failure:
+            generated = source_fallback(batch, provider_failure)
+            fallback_records.extend({'story_id': story_id, 'reason': provider_failure} for story_id in story_ids)
+            output['stories'].extend(generated['stories'])
+            continue
+        try:
+            generated = _generate_batch(batch, config)
+        except AIValidationError as error:
+            reason = error.issue.get('code', 'validation_failure')
+            LOGGER.warning('AI output for %s did not pass validation (%s); using the validated source fallback for this batch.', ', '.join(story_ids), reason)
+            generated = source_fallback(batch, reason)
+            fallback_records.extend({'story_id': story_id, 'reason': reason} for story_id in story_ids)
+        except AIOutputError:
+            reason = 'invalid_provider_output'
+            LOGGER.warning('AI output for %s could not be parsed; using the validated source fallback for this batch.', ', '.join(story_ids))
+            generated = source_fallback(batch, reason)
+            fallback_records.extend({'story_id': story_id, 'reason': reason} for story_id in story_ids)
+        except AIHTTPError as error:
+            recoverable = error.status == 413 or bool(error.provider_codes.intersection({'JSON_VALIDATE_FAILED', 'TOOL_USE_FAILED'}))
+            if recoverable:
+                reason = 'provider_output_rejected' if error.provider_codes else 'provider_request_too_large'
+                LOGGER.warning('The provider could not produce usable output for %s; using the validated source fallback for this batch.', ', '.join(story_ids))
+            else:
+                reason = f'provider_http_{error.status}'
+                provider_failure = reason
+                LOGGER.warning('AI provider request failed with HTTP %s; using validated source fallback for this and all remaining updates.', error.status)
+            generated = source_fallback(batch, reason)
+            fallback_records.extend({'story_id': story_id, 'reason': reason} for story_id in story_ids)
+        except AIError:
+            reason = 'provider_unavailable'
+            provider_failure = reason
+            LOGGER.warning('AI provider generation was unavailable; using validated source fallback for this and all remaining updates.')
+            generated = source_fallback(batch, reason)
+            fallback_records.extend({'story_id': story_id, 'reason': reason} for story_id in story_ids)
+        output['stories'].extend(generated['stories'])
     try:
         validate(payload, output)
     except EditorialValidationError as error:
@@ -414,6 +455,8 @@ def generate(report, config=None):
     data = dict(report)
     data['editorial'] = {'evidence': payload, 'report': output}
     data['ai'] = {'provider': config.provider, 'model': config.model, 'status': 'validated'}
+    if fallback_records:
+        data['ai']['source_fallbacks'] = fallback_records
     if config.provider == 'gemini':
         data['ai']['transport_mode'] = config.gemini_transport
     return data

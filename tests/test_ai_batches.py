@@ -80,7 +80,7 @@ def test_413_splits_without_truncation_or_reordering(monkeypatch):
     assert accepted == payload['stories'] and result['editorial']['report'] == output
 
 
-def test_single_update_413_stops_with_no_partial_report(monkeypatch):
+def test_single_update_413_uses_source_fallback_without_losing_other_updates(monkeypatch):
     payload, output = sample(); by_id = {story['id']: story for story in output['stories']}
     def request(batch, config):
         if batch['stories'][0]['id'] == 's3': raise ai.AIHTTPError(413, 'Reported token limit: 8000; requested: 9000.')
@@ -88,13 +88,14 @@ def test_single_update_413_stops_with_no_partial_report(monkeypatch):
     monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload)
     call = Mock(side_effect=request); monkeypatch.setattr(ai, 'request_editorial', call)
     config = ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1', batch_size=1)
-    with pytest.raises(ai.AIHTTPError, match='Single update s3') as error:
-        ai.generate(source(payload), config)
-    assert call.call_count == 3 and '8000' in str(error.value)
-    assert 'no evidence was discarded' in str(error.value)
+    result = ai.generate(source(payload), config)
+    assert call.call_count == 10
+    assert result['ai']['source_fallbacks'] == [{'story_id': 's3', 'reason': 'provider_request_too_large'}]
+    assert result['editorial']['report']['stories'][2]['generation'] == 'source_fallback'
+    assert [story['id'] for story in result['editorial']['report']['stories']] == [story['id'] for story in payload['stories']]
 
 
-def test_validation_diagnostics_identify_batch_story_ids(monkeypatch):
+def test_validation_fallback_identifies_batch_story_id(monkeypatch):
     payload, output = sample(); by_id = {story['id']: story for story in output['stories']}
     def request(batch, config):
         result = {'stories': [copy.deepcopy(by_id[story['id']]) for story in batch['stories']]}
@@ -102,8 +103,9 @@ def test_validation_diagnostics_identify_batch_story_ids(monkeypatch):
         return result
     monkeypatch.setattr(ai, 'pack', lambda *a, **k: payload); monkeypatch.setattr(ai, 'request_editorial', request)
     config = ai.AIConfig('groq', 'model', 'private-test-key', 'https://api.groq.com/openai/v1', repair_attempts=0, batch_size=1)
-    with pytest.raises(ai.AIValidationError) as error: ai.generate(source(payload), config)
-    assert error.value.issue['story_ids'] == ['s4'] and error.value.issue['code'] == 'detail_count'
+    result = ai.generate(source(payload), config)
+    assert result['ai']['source_fallbacks'] == [{'story_id': 's4', 'reason': 'detail_count'}]
+    assert result['editorial']['report']['stories'][3]['generation'] == 'source_fallback'
 
 
 def test_rate_headers_pace_next_request_without_printing_body(monkeypatch, caplog):

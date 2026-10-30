@@ -26,6 +26,9 @@ def deliver(directory, format, webhook_url):
     content = f"Cyber Feed — {data['period']} cyber briefing: {len(data['stories'])} updates."
     if data['errors']:
         content += f" {len(data['errors'])} coverage warnings; see the report."
+    fallback_count = len(data.get('ai', {}).get('source_fallbacks', []))
+    if fallback_count:
+        content += f" {fallback_count} update(s) used validated source fallback because AI generation did not produce validated drafts."
     filename = f"cyber-feed-{data['period']}-{data['generated'][:10]}.{extension}"
     # Never log request exceptions: their URLs contain webhook credentials.
     try:

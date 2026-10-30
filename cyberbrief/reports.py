@@ -125,6 +125,9 @@ def editorial_sections(data):
     validate(payload, output)
     yield 'Cyber Feed'
     yield f"{data['period'].title()} AI report · {data['generated']}"
+    fallback_ids = {item['story_id'] for item in data.get('ai', {}).get('source_fallbacks', [])}
+    if fallback_ids:
+        yield f"{len(fallback_ids)} update(s) use validated source fallback because AI generation did not produce validated drafts."
     if data.get('window_start'):
         yield f"Coverage: {data['window_start']} to {data['window_end']} (end exclusive)"
     if not output['stories']:
@@ -133,13 +136,16 @@ def editorial_sections(data):
     for index,(source,story) in enumerate(zip(payload['stories'],output['stories']),1):
         yield f"{index}. {story['title']}"
         yield source['source']+' · '+source['published'][:10]
+        is_fallback = story.get('generation') == 'source_fallback'
+        if is_fallback:
+            yield 'Validated source-extracted fallback: this update contains collected source text only.'
         refs = source.get('references') or [{'source':source['source'],'url':source['url']}]
         def citation(item):
             number = next((n for n,r in enumerate(refs,1) if 'KEV' in r['source']),1) if item['evidence_id'].endswith('.kev') else 1
             return f' [{index}.{number}]'
         yield 'a. Summary'
         for bullet in story['bullets']: yield '• '+bullet['text']+citation(bullet)
-        yield 'b. Detailed Reports (powered by AI)'
+        yield 'b. Detailed Report (validated source fallback)' if is_fallback else 'b. Detailed Reports (powered by AI)'
         for item in story['details']: yield labels[item['section']]+': '+item['text']+citation(item)
         if story.get('diagram'):
             yield 'Optional diagram relationships'

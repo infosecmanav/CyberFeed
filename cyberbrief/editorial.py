@@ -20,30 +20,154 @@ DETAIL_SECTION_ALIASES = {
     'recommended_action': 'action', 'workaround': 'action', 'response': 'action',
     'exploit': 'exploitation', 'exploitation_status': 'exploitation', 'status': 'exploitation',
 }
+MISSING_FIELDS = frozenset({'versions', 'remediation', 'exploitation', 'workaround'})
+EVIDENCE_SECTIONS = {
+    'summary': ('what', 'context'),
+    'affected': ('affected', 'affected'),
+    'remediation': ('action', 'action'),
+    'workarounds': ('action', 'action'),
+    'exploitation': ('exploitation', 'exploitation'),
+    'kev': ('exploitation', 'exploitation'),
+    'title': ('what', 'context'),
+}
 
 
-def normalize_editorial_labels(summary):
-    """Canonicalize non-rendered bullet labels without changing report claims."""
+def normalize_editorial_labels(summary, payload=None):
+    """Canonicalize harmless model formatting without changing report claims."""
     normalized = copy.deepcopy(summary)
     if not isinstance(normalized, dict) or not isinstance(normalized.get('stories'), list):
         return normalized
-    for story in normalized['stories']:
+    expected = payload.get('stories', []) if isinstance(payload, dict) else []
+    # A one-story request cannot be reordered. Correcting its opaque ID is safe
+    # and avoids asking the model to regenerate otherwise valid content.
+    if len(expected) == len(normalized['stories']) == 1 and isinstance(normalized['stories'][0], dict):
+        normalized['stories'][0]['id'] = expected[0]['id']
+    for index, story in enumerate(normalized['stories']):
         if not isinstance(story, dict):
             continue
+        # These labels are application-owned and must not be model-controlled.
+        story.pop('generation', None)
+        story.pop('fallback_reason', None)
+        source = expected[index] if index < len(expected) and story.get('id') == expected[index].get('id') else None
+        evidence = {entry['id']: entry['text'] for entry in source.get('evidence', [])} if source else {}
+        if source and (not isinstance(story.get('title'), str) or not story['title'].strip() or len(story['title']) > 140):
+            story['title'] = _bounded_title(source.get('title', 'Security update'))
+        missing = story.get('missing', [])
+        story['missing'] = [value for value in missing if value in MISSING_FIELDS] if isinstance(missing, list) else []
         if isinstance(story.get('bullets'), list):
+            story['bullets'] = story['bullets'][:5]
             for bullet in story['bullets']:
                 if isinstance(bullet, dict) and bullet.get('kind') not in BULLET_KINDS:
                     # The renderer does not display this classification. Use the
                     # neutral category while leaving text and evidence untouched.
                     bullet['kind'] = 'what'
+                _ground_citation(bullet, evidence, source)
         if isinstance(story.get('details'), list):
+            story['details'] = story['details'][:20]
             for detail in story['details']:
                 if not isinstance(detail, dict) or detail.get('section') in DETAIL_SECTIONS:
-                    continue
-                value = detail.get('section')
-                key = re.sub(r'[^a-z0-9]+', '_', value.strip().lower()).strip('_') if isinstance(value, str) else ''
-                detail['section'] = key if key in DETAIL_SECTIONS else DETAIL_SECTION_ALIASES.get(key, 'context')
+                    _ground_citation(detail, evidence, source)
+                else:
+                    value = detail.get('section')
+                    key = re.sub(r'[^a-z0-9]+', '_', value.strip().lower()).strip('_') if isinstance(value, str) else ''
+                    detail['section'] = key if key in DETAIL_SECTIONS else DETAIL_SECTION_ALIASES.get(key, 'context')
+                    _ground_citation(detail, evidence, source)
+        diagram = story.get('diagram')
+        if isinstance(diagram, dict):
+            for node in diagram.get('nodes', []) if isinstance(diagram.get('nodes'), list) else []:
+                _ground_citation(node, evidence, source)
+            for edge in diagram.get('edges', []) if isinstance(diagram.get('edges'), list) else []:
+                _ground_citation(edge, evidence, source)
     return normalized
+
+
+def _bounded_title(title):
+    title = title.strip() if isinstance(title, str) else ''
+    if not title:
+        return 'Security update'
+    if len(title) <= 140:
+        return title
+    shortened = title[:140]
+    return shortened.rsplit(' ', 1)[0] or shortened
+
+
+def _ground_citation(item, evidence, source):
+    """Attach the exact cited evidence selected by the model.
+
+    The model still chooses the evidence entry. The application supplies its
+    exact text so punctuation and whitespace reproduction cannot break an
+    otherwise attributable report.
+    """
+    if not isinstance(item, dict) or not source:
+        return
+    ident = item.get('evidence_id')
+    if isinstance(ident, str) and ident not in evidence:
+        suffix = ident.rsplit('.', 1)[-1]
+        candidate = source['id'] + '.' + suffix
+        if candidate in evidence:
+            ident = candidate
+            item['evidence_id'] = candidate
+    if isinstance(ident, str) and ident in evidence:
+        quote = item.get('quote')
+        text = item.get('text', '')
+        if (not isinstance(quote, str) or quote not in evidence[ident] or
+                not fact_tokens(text).issubset(fact_tokens(quote))):
+            item['quote'] = evidence[ident]
+
+
+def _excerpt(text, word_limit):
+    text = text.strip()
+    words = list(re.finditer(r'\S+', text))
+    if len(words) <= word_limit:
+        return text
+    return text[:words[word_limit - 1].end()]
+
+
+def source_fallback(payload, reason='validation_failure'):
+    """Create a fully source-grounded report when model output is unusable."""
+    stories = []
+    for source in payload.get('stories', []):
+        evidence = source.get('evidence', [])
+        title = _bounded_title(source.get('title', 'Security update'))
+        remaining = max(1, 120 - len(title.split()))
+        bullets = []
+        for entry in evidence[:5]:
+            if remaining <= 0:
+                break
+            text = _excerpt(entry['text'], min(24, remaining))
+            if not text:
+                continue
+            suffix = entry['id'].rsplit('.', 1)[-1]
+            kind, _ = EVIDENCE_SECTIONS.get(suffix, ('what', 'context'))
+            bullets.append({'kind': kind, 'text': text, 'evidence_id': entry['id'],
+                            'quote': entry['text']})
+            remaining -= len(text.split())
+        if not bullets:
+            # pack() guarantees at least title evidence, but retain a defensive
+            # branch for externally supplied payloads.
+            ident = source['id'] + '.title'
+            text = title
+            source.setdefault('evidence', []).append({'id': ident, 'text': text, 'truncated': False})
+            evidence = source['evidence']
+            bullets = [{'kind': 'what', 'text': text, 'evidence_id': ident, 'quote': text}]
+        details = []
+        for entry in evidence[:20]:
+            suffix = entry['id'].rsplit('.', 1)[-1]
+            _, section = EVIDENCE_SECTIONS.get(suffix, ('what', 'context'))
+            details.append({'section': section, 'text': entry['text'],
+                            'evidence_id': entry['id'], 'quote': entry['text']})
+        suffixes = {entry['id'].rsplit('.', 1)[-1] for entry in evidence}
+        missing = []
+        if 'affected' not in suffixes: missing.append('versions')
+        if 'remediation' not in suffixes: missing.append('remediation')
+        if not suffixes.intersection({'exploitation', 'kev'}): missing.append('exploitation')
+        if 'workarounds' not in suffixes: missing.append('workaround')
+        stories.append({'id': source['id'], 'title': title, 'bullets': bullets,
+                        'details': details, 'missing': missing,
+                        'generation': 'source_fallback', 'fallback_reason': reason})
+    result = {'stories': stories}
+    validate(payload, result)
+    return result
 
 
 def pack(report, detail_level='full'):
@@ -66,6 +190,8 @@ def pack(report, detail_level='full'):
                 evidence.append({'id': ident+'.'+field, 'text': text if detail_level == 'full' else ' '.join(words[:budget]), 'truncated': (detail_level == 'compact' and len(words)>budget) or fields.get(field, {}).get('truncated', False)})
         if source.get('known_exploited_cves'):
             evidence.append({'id': ident+'.kev', 'text': 'CISA KEV matched CVEs: '+', '.join(source['known_exploited_cves']), 'truncated': False})
+        if not evidence:
+            evidence.append({'id': ident+'.title', 'text': _bounded_title(source.get('title', 'Security update')), 'truncated': False})
         references = []
         for label,url in [(source['source'],source.get('details',{}).get('url',source['url'])),(source['source'],source['url'])]+[(e.get('source','Supporting source'),e['url']) for e in source.get('evidence',[]) if e.get('url')]:
             if url not in [r['url'] for r in references]:
@@ -220,7 +346,11 @@ def render(payload, summary, theme='dark', *, preview=True):
     body=style('body');heading=style('heading',13,ink,17);meta=style('meta',8,muted,12);title=style('title',28,ink,34)
     heading.keepWithNext = True
     out=BytesIO();doc=SimpleDocTemplate(out,leftMargin=36,rightMargin=36,topMargin=42,bottomMargin=42)
-    flow=[Paragraph('Cyber Feed',title),Paragraph('DESIGN PREVIEW · Historical sample' if preview else 'AI-edited report · Source-linked evidence',style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
+    has_fallback = any(story.get('generation') == 'source_fallback' for story in summary['stories'])
+    notice = ('DESIGN PREVIEW · Historical sample' if preview else
+              'AI report with validated source fallback · Source-linked evidence' if has_fallback else
+              'AI-edited report · Source-linked evidence')
+    flow=[Paragraph('Cyber Feed',title),Paragraph(notice,style('notice',9,accent,14)),Paragraph(f"{escape(payload['period'].title())} · {len(summary['stories'])} selected updates · {escape(datetime.fromisoformat(payload['generated']).astimezone(ZoneInfo('America/Toronto')).strftime('%b %d, %Y'))}",meta)]
     if not summary['stories']:flow.append(Paragraph('No updates in this coverage window.',body))
     if payload.get('window_start') and payload.get('window_end'):
         zone = ZoneInfo('America/Toronto')
@@ -232,13 +362,17 @@ def render(payload, summary, theme='dark', *, preview=True):
         if index > 1:
             flow.append(PageBreak())
         content=[Paragraph(f"{index:02d} / {escape(story['title'])}",heading),Paragraph(escape(source['source']+' · '+source['published'][:10]),meta),Paragraph('a. Summary',heading)]
+        is_fallback = story.get('generation') == 'source_fallback'
+        if is_fallback:
+            content.append(Paragraph('Validated source-extracted fallback: AI generation did not produce a validated draft, so this update uses only collected source text.', meta))
         references = source.get('references') or [{'source':source['source'],'url':source['url']}]
         def citation(item):
             ref = next((i for i,r in enumerate(references,1) if 'KEV' in r['source']),1) if item['evidence_id'].endswith('.kev') else 1
             return f' [{index}.{ref}]'
         for bullet in story['bullets']:
             content.append(Paragraph('• '+escape(bullet['text'])+citation(bullet),body))
-        content.append(Paragraph('b. Detailed Reports (powered by AI)',heading))
+        detail_heading = 'b. Detailed Report (validated source fallback)' if is_fallback else 'b. Detailed Reports (powered by AI)'
+        content.append(Paragraph(detail_heading,heading))
         last_section = None
         for item in story['details']:
             label = f'<font color="{accent.hexval()}">{labels[item["section"]]}</font><br/>' if item['section'] != last_section else ''

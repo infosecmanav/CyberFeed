@@ -314,7 +314,7 @@ def test_incomplete_or_non_json_response_is_rejected(configured):
         with pytest.raises(AIError):request_editorial(sample()[0],AIConfig.from_env())
 
 
-def test_generation_validates_before_rendering_and_never_falls_back(configured):
+def test_generation_validates_before_rendering_and_uses_source_fallback(configured):
     p,o=sample();report={'period':p['period'],'generated':p['generated'],'stories':[{} for _ in p['stories']],'errors':[],'demo':False}
     configured.setattr('cyberbrief.ai.pack',lambda *a,**k:p)
     configured.setattr('cyberbrief.ai.request_editorial',lambda *a:o)
@@ -323,10 +323,14 @@ def test_generation_validates_before_rendering_and_never_falls_back(configured):
     text='\n'.join(sections(d));assert text.count('a. Summary')==10 and text.count('c. References')==10
     reader=PdfReader(BytesIO(pdf_report(d)));text='\n'.join(page.extract_text() for page in reader.pages)
     assert 'Cyber Feed' in text and 'DESIGN PREVIEW' not in text
-    bad=copy.deepcopy(o);bad['stories'][0]['bullets'][0]['quote']='invented quote'
+    bad=copy.deepcopy(o);bad['stories'][0]['bullets'][0]['text']+=' CVE-2099-9999.'
     configured.setattr('cyberbrief.ai.request_editorial',lambda *a:bad)
     configured.setattr('cyberbrief.ai.repair_editorial',lambda *a:bad)
-    with pytest.raises(AIError,match='evidence checks'):generate(report)
+    fallback=generate(report)
+    assert len(fallback['ai']['source_fallbacks'])==10
+    assert all(story['generation']=='source_fallback' for story in fallback['editorial']['report']['stories'])
+    assert 'CVE-2099-9999' not in json.dumps(fallback)
+    validate(p,fallback['editorial']['report'])
 
 
 def test_empty_window_requires_config_but_avoids_model_call(configured):

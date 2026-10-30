@@ -38,6 +38,22 @@ def test_delivery_failure_does_not_leak_secret_or_retry(tmp_path, monkeypatch):
     assert 'test-secret' not in str(exc.value) and post.call_count == 1
 
 
+def test_delivery_discloses_source_fallback_count(tmp_path, monkeypatch):
+    directory = report(tmp_path)
+    data = json.loads((directory/'briefing.json').read_text())
+    data['ai']['source_fallbacks'] = [{'story_id': 's1', 'reason': 'validation_failure'}]
+    (directory/'briefing.json').write_text(json.dumps(data))
+
+    def post(url, **kwargs):
+        content = json.loads(kwargs['data']['payload_json'])['content']
+        assert '1 update(s) used validated source fallback' in content
+        assert 'AI generation did not produce validated drafts' in content
+        return Mock(status_code=200)
+
+    monkeypatch.setattr('cyberbrief.webhook.requests.post', post)
+    deliver(directory, 'pdf', URL)
+
+
 @pytest.mark.parametrize('status',[302,401,404,429,500])
 def test_webhook_failed_http_status_is_failure(tmp_path,monkeypatch,status):
     monkeypatch.setattr('cyberbrief.webhook.requests.post',Mock(return_value=Mock(status_code=status)))
