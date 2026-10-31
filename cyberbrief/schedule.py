@@ -4,8 +4,9 @@ import os
 from zoneinfo import ZoneInfo
 
 TORONTO = ZoneInfo('America/Toronto')
-SLOTS = {'50 12 * * *': ('daily', time(8, 50)), '50 13 * * *': ('daily', time(8, 50)),
-         '30 12 * * 5': ('weekly', time(8, 30)), '30 13 * * 5': ('weekly', time(8, 30))}
+SLOTS = {'50 12-18 * * *': ('daily', time(8, 50)),
+         '30 12-18 * * 5': ('weekly', time(8, 30))}
+RETRY_WINDOW = timedelta(hours=6)
 
 
 def gate(event, expression, period='daily', now=None):
@@ -15,8 +16,10 @@ def gate(event, expression, period='daily', now=None):
         return False, period
     local = (now or datetime.now(timezone.utc)).astimezone(TORONTO)
     selected, clock = SLOTS[expression]
-    target = datetime.combine(local.date(), clock, tzinfo=TORONTO).astimezone(timezone.utc)
-    return int(expression.split()[1]) == target.hour, selected
+    if selected == 'weekly' and local.weekday() != 4:
+        return False, selected
+    target = datetime.combine(local.date(), clock, tzinfo=TORONTO)
+    return target <= local <= target + RETRY_WINDOW, selected
 
 
 def should_run(event, expression, now=None):
@@ -40,7 +43,15 @@ def report_window(period, now=None):
     return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
 
 
+def delivery_key(period, now=None):
+    """Stable key for one completed report window, used to prevent duplicates."""
+    _, end = report_window(period, now)
+    date = end.astimezone(TORONTO).date().isoformat()
+    return f'cyber-feed-delivered-{period}-{date}'
+
+
 if __name__ == '__main__':
     enabled, period = gate(os.getenv('GITHUB_EVENT_NAME'), os.getenv('SCHEDULE_EXPRESSION'), os.getenv('REPORT_PERIOD', 'daily'))
     with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
         output.write('enabled=' + str(enabled).lower() + '\nperiod=' + period + '\n')
+        output.write('delivery_key=' + delivery_key(period) + '\n')

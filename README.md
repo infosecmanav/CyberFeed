@@ -77,7 +77,9 @@ Friday includes both deliveries. Manual daily runs use the last completed 8:50 A
 
 Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml), with timezone selection and coverage boundaries in [cyberbrief/schedule.py](cyberbrief/schedule.py). Changes to delivery times must keep those definitions consistent.
 
-GitHub scheduled workflows run from the default branch and may be delayed. Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
+GitHub scheduled workflows are best effort and can be delayed or occasionally omit a cron event. Cyber Feed therefore provides several hourly opportunities after each Toronto delivery time. A successful-delivery marker keyed to the completed daily or weekly window prevents duplicate Discord posts; if an attempt fails or GitHub omits it, a later opportunity can deliver the same window. Manual runs bypass this marker and always run when requested.
+
+Schedules run from the default branch. Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
 
 ## Configuration
 

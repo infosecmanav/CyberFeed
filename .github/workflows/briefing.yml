@@ -17,13 +17,13 @@ on:
           - text
         default: pdf
   schedule:
-    # Toronto daily 08:50; Friday weekly 08:30. Gate selects the DST slot.
-    - cron: '50 12 * * *'
-    - cron: '50 13 * * *'
-    - cron: '30 12 * * 5'
-    - cron: '30 13 * * 5'
+    # Several opportunities make GitHub's best-effort scheduler resilient.
+    # The Toronto gate and delivery marker allow only one successful delivery.
+    - cron: '50 12-18 * * *'
+    - cron: '30 12-18 * * 5'
 permissions:
   contents: read
+  actions: write
 concurrency:
   group: daily-discord-briefing
   cancel-in-progress: false
@@ -33,6 +33,8 @@ jobs:
     outputs:
       enabled: ${{ steps.gate.outputs.enabled }}
       period: ${{ steps.gate.outputs.period }}
+      delivery_key: ${{ steps.gate.outputs.delivery_key }}
+      already_delivered: ${{ steps.delivery-marker.outputs.cache-hit }}
     steps:
       - uses: actions/checkout@v4
       - name: Select Toronto morning slot
@@ -41,9 +43,18 @@ jobs:
           REPORT_PERIOD: ${{ inputs.period || 'daily' }}
           SCHEDULE_EXPRESSION: ${{ github.event.schedule }}
         run: python3 -m cyberbrief.schedule
+      - name: Check successful delivery marker
+        if: steps.gate.outputs.enabled == 'true' && github.event_name == 'schedule'
+        id: delivery-marker
+        uses: actions/cache/restore@v4
+        continue-on-error: true
+        with:
+          path: .state/delivery-marker
+          key: ${{ steps.gate.outputs.delivery_key }}
+          lookup-only: true
   deliver:
     needs: schedule
-    if: needs.schedule.outputs.enabled == 'true'
+    if: needs.schedule.outputs.enabled == 'true' && needs.schedule.outputs.already_delivered != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -118,3 +129,15 @@ jobs:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           REPORT_FORMAT: ${{ inputs.format || vars.BRIEFING_FORMAT || 'pdf' }}
         run: python -m cyberbrief.webhook --out site --format "$REPORT_FORMAT"
+      - name: Create successful delivery marker
+        if: github.event_name == 'schedule'
+        run: |
+          mkdir -p .state
+          date -u > .state/delivery-marker
+      - name: Save successful delivery marker
+        if: github.event_name == 'schedule'
+        uses: actions/cache/save@v4
+        continue-on-error: true
+        with:
+          path: .state/delivery-marker
+          key: ${{ needs.schedule.outputs.delivery_key }}
