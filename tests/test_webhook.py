@@ -72,7 +72,8 @@ def test_demo_or_untrusted_destination_cannot_be_sent(tmp_path,monkeypatch):
 @pytest.mark.parametrize('date,expected', [
     ('2026-07-01T12:50:00+00:00', True),
     ('2026-07-01T18:50:00+00:00', True),
-    ('2026-12-01T12:50:00+00:00', False),
+    ('2026-07-01T20:42:10+00:00', True),
+    ('2026-12-01T12:50:00+00:00', True),
     ('2026-12-01T13:50:00+00:00', True),
     ('2026-03-08T12:50:00+00:00', True),
     ('2026-11-01T13:50:00+00:00', True),
@@ -87,8 +88,11 @@ def test_schedule_summer_winter_and_transition_days(date,expected):
 
 def test_schedule_does_not_skip_delayed_matching_slot():
     from datetime import datetime
-    from cyberbrief.schedule import should_run
+    from cyberbrief.schedule import delivery_key, should_run
     assert should_run('schedule','50 12-18 * * *',datetime.fromisoformat('2026-07-01T13:10:00+00:00'))
+    delayed = datetime.fromisoformat('2026-10-31T20:42:10+00:00')
+    assert should_run('schedule','50 12-18 * * *',delayed)
+    assert delivery_key('daily', delayed) == 'cyber-feed-delivered-daily-2026-10-31'
     assert not should_run('push','50 12-18 * * *')
 
 
@@ -97,7 +101,8 @@ def test_schedule_does_not_skip_delayed_matching_slot():
     ('2026-07-03T18:30:00+00:00', True),
     ('2026-12-04T13:30:00+00:00', True),
     ('2026-12-04T12:30:00+00:00', False),
-    ('2026-12-05T13:30:00+00:00', False),
+    ('2026-12-05T13:30:00+00:00', True),
+    ('2026-12-06T13:30:00+00:00', False),
 ])
 def test_weekly_dst_gate(date,expected):
     from datetime import datetime
@@ -114,6 +119,14 @@ def test_delivery_keys_are_stable_for_completed_windows():
     assert delivery_key('weekly', datetime.fromisoformat('2026-10-31T13:00:00+00:00')) == 'cyber-feed-delivered-weekly-2026-10-30'
 
 
+def test_winter_pre_cutoff_slot_targets_previous_daily_window_for_catchup():
+    from datetime import datetime
+    from cyberbrief.schedule import delivery_key, gate
+    now = datetime.fromisoformat('2026-11-01T12:50:00+00:00')
+    assert gate('schedule', '50 12-18 * * *', now=now) == (True, 'daily')
+    assert delivery_key('daily', now) == 'cyber-feed-delivered-daily-2026-10-31'
+
+
 def test_workflow_has_backup_slots_and_success_deduplication():
     from pathlib import Path
     import yaml
@@ -127,6 +140,16 @@ def test_workflow_has_backup_slots_and_success_deduplication():
     deliver = workflow['jobs']['deliver']
     assert 'already_delivered' in deliver['if']
     assert any(step.get('uses') == 'actions/cache/save@v4' for step in deliver['steps'])
+    names = [step.get('name', '') for step in deliver['steps']]
+    assert 'Install runtime dependencies' in names
+    assert all('pytest' not in step.get('run', '') for step in deliver['steps'])
+    assert names.index('Send report to Discord') < names.index('Create successful delivery marker') < names.index('Upload report artifact')
+    artifact = next(step for step in deliver['steps'] if step.get('name') == 'Upload report artifact')
+    assert artifact['if'] == 'always()' and artifact['continue-on-error'] == 'true'
+
+    tests = yaml.load((Path(__file__).resolve().parent.parent / '.github/workflows/test.yml').read_text(), Loader=yaml.BaseLoader)
+    commands = '\n'.join(step.get('run', '') for step in tests['jobs']['test']['steps'])
+    assert 'requirements-dev.txt' in commands and 'pytest -q' in commands
 
 
 def test_friday_thursday_week_and_dst_boundary():

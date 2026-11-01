@@ -6,7 +6,6 @@ from zoneinfo import ZoneInfo
 TORONTO = ZoneInfo('America/Toronto')
 SLOTS = {'50 12-18 * * *': ('daily', time(8, 50)),
          '30 12-18 * * 5': ('weekly', time(8, 30))}
-RETRY_WINDOW = timedelta(hours=6)
 
 
 def gate(event, expression, period='daily', now=None):
@@ -16,10 +15,17 @@ def gate(event, expression, period='daily', now=None):
         return False, period
     local = (now or datetime.now(timezone.utc)).astimezone(TORONTO)
     selected, clock = SLOTS[expression]
-    if selected == 'weekly' and local.weekday() != 4:
-        return False, selected
-    target = datetime.combine(local.date(), clock, tzinfo=TORONTO)
-    return target <= local <= target + RETRY_WINDOW, selected
+    after_target = (local.hour, local.minute) >= (clock.hour, clock.minute)
+    if selected == 'weekly':
+        # A heavily delayed Friday event may start on Saturday. It still maps
+        # to the same completed Friday-Thursday window and delivery key.
+        enabled = (local.weekday() == 4 and after_target) or local.weekday() == 5
+        return enabled, selected
+    # The first winter slot occurs at 07:50 Toronto time. Before the cutoff,
+    # report_window() and delivery_key() intentionally identify yesterday's
+    # completed window, allowing one catch-up attempt when its marker is absent.
+    # Later slots identify today's window. The marker prevents duplicates.
+    return True, selected
 
 
 def should_run(event, expression, now=None):

@@ -77,7 +77,9 @@ Friday includes both deliveries. Manual daily runs use the last completed 8:50 A
 
 Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml), with timezone selection and coverage boundaries in [cyberbrief/schedule.py](cyberbrief/schedule.py). Changes to delivery times must keep those definitions consistent.
 
-GitHub scheduled workflows are best effort and can be delayed or occasionally omit a cron event. Cyber Feed therefore provides several hourly opportunities after each Toronto delivery time. A successful-delivery marker keyed to the completed daily or weekly window prevents duplicate Discord posts; if an attempt fails or GitHub omits it, a later opportunity can deliver the same window. Manual runs bypass this marker and always run when requested.
+GitHub scheduled workflows are best effort and can be delayed by hours or occasionally omit a cron event. Cyber Feed therefore provides several hourly opportunities and accepts delayed events without an exact-second cutoff. A successful-delivery marker keyed to the completed daily or weekly window prevents duplicate Discord posts; if an attempt fails or GitHub omits it, a later opportunity can deliver the same window. During standard time, a 7:50 AM Toronto event that starts before the 8:50 AM cutoff checks the previous completed window; the 8:50 AM slot starts the new daily window. Manual runs bypass markers and always run when requested.
+
+The delivery workflow installs runtime dependencies, builds the report, posts to Discord, and then records successful delivery. Artifact upload runs afterward and cannot block a valid Discord report. The separate **Tests** workflow runs the full test suite on pushes and pull requests, keeping CI failures out of the scheduled delivery path.
 
 Schedules run from the default branch. Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
 
