@@ -1,297 +1,206 @@
+<div align="center">
+
 # Cyber Feed
 
-Cyber Feed collects cybersecurity updates from government agencies, vendor advisories, threat research teams, and selected news publishers. It produces evidence-linked PDF and text reports for scheduled Discord delivery or local review.
+**Evidence-linked cyber briefings, delivered to Discord.**
 
-Scheduled reports run through GitHub Actions. An optional Discord bot supports on-demand reports and per-user format preferences.
+[![Tests](https://github.com/infosecmanav/CyberFeed/actions/workflows/test.yml/badge.svg)](https://github.com/infosecmanav/CyberFeed/actions/workflows/test.yml)
+[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![AI: Groq](https://img.shields.io/badge/AI-Groq-F55036)](https://console.groq.com/)
+[![Delivery: Discord](https://img.shields.io/badge/Delivery-Discord-5865F2?logo=discord&logoColor=white)](https://discord.com/)
 
-> **AI configuration is required for report generation and delivery.** Configure your provider key, model, and API settings. Reports use the Cyber Feed black-and-blue layout, with a summary, detailed explanation, and references for each update. Invalid or unavailable AI output is never accepted: affected updates use a clearly labeled, validated source fallback so the scheduled report can still be delivered.
+Daily and weekly PDF or text reports from trusted security sources.
 
-## Contents
+</div>
 
-- [Scheduled Discord deployment](#scheduled-discord-deployment)
-- [Report schedule](#report-schedule)
-- [Configuration](#configuration)
-- [Sources and evidence handling](#sources-and-evidence-handling)
-- [Local installation](#local-installation)
-- [AI report generation](#ai-report-generation)
-- [Interactive Discord bot](#interactive-discord-bot)
-- [Security and operational considerations](#security-and-operational-considerations)
-- [Troubleshooting](#troubleshooting)
-- [Development](#development)
+> [!IMPORTANT]
+> **Groq is the only supported AI provider for this project setup.** The scheduled workflow is maintained and tested with `AI_PROVIDER=groq` and `AI_MODEL=openai/gpt-oss-120b`.
 
-## Scheduled Discord deployment
+> [!NOTE]
+> **Scheduled delivery is not guaranteed at an exact minute.** GitHub Actions uses a best-effort scheduler. Cyber Feed targets the Toronto morning windows below, but GitHub may start a run minutes or hours later.
 
-### Prerequisites
+![Cyber Feed dark report preview](docs/editorial-preview/dark-preview.png)
 
-- A GitHub account and a fork of this repository.
-- A Discord channel where you have permission to create webhooks.
-- GitHub Actions enabled in your fork.
+## What Cyber Feed does
 
-This deployment requires your AI provider key and Discord webhook. It does not require a continuously running local computer, a Discord bot token, or a personal GitHub API key. GitHub supplies the workflow token used for checkout and artifacts.
+Cyber Feed collects security updates from government agencies, product vendors, threat research teams, and selected news publishers. It selects up to ten useful updates, asks Groq to produce evidence-grounded editorial content, validates the result, renders a black-and-blue report, and sends it to Discord.
 
-### 1. Fork the repository
+Each update follows the same format:
 
-Fork the repository into your own account. Open the fork's **Actions** tab and enable workflows if prompted. Repository secrets are not copied from the original repository.
+1. **Summary** — a concise overview of the event and why it matters.
+2. **Detailed Reports (powered by AI)** — affected products, exploitation evidence, technical context, remediation, and other facts supported by the source material.
+3. **References** — links and citations for the evidence used in that update.
 
-### 2. Create the Discord webhook
+Optional diagrams appear only when the source evidence supports them and they improve understanding.
 
-In the destination channel, open **Channel Settings → Integrations → Webhooks**. Create a webhook and copy its URL. Treat the URL as a credential: anyone holding it can post to that channel.
+```mermaid
+flowchart LR
+    A[Trusted security sources] --> B[Collect and enrich]
+    B --> C[Select up to 10 updates]
+    C --> D[Groq generation]
+    D --> E[Schema and evidence validation]
+    D -. invalid or unavailable .-> F[Validated source fallback]
+    F --> E
+    E --> G[PDF or text report]
+    G --> H[Discord webhook]
+```
 
-### 3. Configure the repository secret
+## Quick start with GitHub Actions
 
-In your fork, open **Settings → Secrets and variables → Actions → New repository secret**.
+This is the recommended deployment. It runs in GitHub, so your computer does not need to remain on.
+
+### 1. Use the repository
+
+If this is your repository, use it directly. Otherwise, fork it to your GitHub account. Open the repository's **Actions** tab and enable workflows if GitHub prompts you.
+
+### 2. Create a Discord webhook
+
+In the destination Discord channel, open **Channel Settings → Integrations → Webhooks**, create a webhook, and copy its URL. Treat this URL like a password.
+
+### 3. Create a Groq API key
+
+Create a key at [console.groq.com/keys](https://console.groq.com/keys). Use only a Groq key; keys from other AI providers are not supported by this setup.
+
+### 4. Add GitHub Actions secrets
+
+Open **Settings → Secrets and variables → Actions → Secrets → New repository secret** and add:
 
 | Secret | Value |
 | --- | --- |
-| `DISCORD_WEBHOOK_URL` | The webhook URL for your destination channel |
-| `AI_API_KEY` | Your selected AI provider’s API key |
+| `AI_API_KEY` | Your Groq API key |
+| `DISCORD_WEBHOOK_URL` | Your Discord channel webhook URL |
 
-Create repository Actions variables `AI_PROVIDER` and `AI_MODEL` using the provider configuration below. For a custom OpenAI-compatible service, also set `AI_BASE_URL`.
+Secrets are encrypted and are not printed in workflow logs.
 
-For scheduled text delivery, also create an Actions **variable** named `BRIEFING_FORMAT` with the value `text`. The default is `pdf`.
+### 5. Add GitHub Actions variables
 
-### 4. Validate delivery
+On the same page, select **Variables → New repository variable** and add:
 
-Open **Actions → Scheduled Discord Briefings → Run workflow**. Select the report period and format, then run the workflow.
-
-Confirm that:
-
-- The workflow completes successfully.
-- The report arrives in the configured channel.
-- Any coverage warnings are visible in the report.
-
-Before collecting feeds, the configuration step logs the effective provider, model ID, and API base URL without the key. For Gemini's native interface it retrieves the exact model's metadata and checks that it advertises `generateContent`. In the default `auto` mode, a metadata 404 or temporary server failure is reported and deferred to generation, which can try Google's second interface. In `native` mode, a metadata 404 stops the workflow with `model not found` and the model ID. Direct `openai-compatible` mode skips native metadata lookup. Successful metadata lookup does not establish that generation will succeed.
-
-Manual runs begin immediately; delivery follows source collection, AI generation, validation, and rendering. Free-tier pacing can add several minutes. Generated JSON, text, and PDF files are retained as a downloadable workflow artifact for seven days.
-
-## Report schedule
-
-All delivery times use **America/Toronto**, with daylight saving adjustments.
-
-| Report | Delivery time | Coverage window |
+| Variable | Value | Required |
 | --- | --- | --- |
-| Daily | Every day at **8:50 AM** | Previous local 8:50 AM through the current 8:50 AM, end exclusive |
-| Weekly | Friday at **8:30 AM** | Previous Friday 00:00 through Thursday, ending Friday 00:00 exclusive |
+| `AI_PROVIDER` | `groq` | Yes |
+| `AI_MODEL` | `openai/gpt-oss-120b` | Yes |
+| `BRIEFING_FORMAT` | `pdf` or `text` | No; defaults to `pdf` |
 
-Friday includes both deliveries. Manual daily runs use the last completed 8:50 AM cutoff; manual weekly runs use the most recently completed Friday–Thursday period.
+Leave `AI_BASE_URL` unset. Cyber Feed uses Groq's standard endpoint automatically.
 
-Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml), with timezone selection and coverage boundaries in [cyberbrief/schedule.py](cyberbrief/schedule.py). Changes to delivery times must keep those definitions consistent.
+### 6. Run a test delivery
 
-GitHub scheduled workflows are best effort and can be delayed by hours or occasionally omit a cron event. Cyber Feed therefore provides several hourly opportunities and accepts delayed events without an exact-second cutoff. A successful-delivery marker keyed to the completed daily or weekly window prevents duplicate Discord posts; if an attempt fails or GitHub omits it, a later opportunity can deliver the same window. During standard time, a 7:50 AM Toronto event that starts before the 8:50 AM cutoff checks the previous completed window; the 8:50 AM slot starts the new daily window. Manual runs bypass markers and always run when requested.
+Open **Actions → Scheduled Discord Briefings → Run workflow**, select `daily` or `weekly` and `pdf` or `text`, then choose **Run workflow**.
 
-The delivery workflow installs runtime dependencies, builds the report, posts to Discord, and then records successful delivery. Artifact upload runs afterward and cannot block a valid Discord report. The separate **Tests** workflow runs the full test suite on pushes and pull requests, keeping CI failures out of the scheduled delivery path.
+A manual run starts as soon as a GitHub runner is available. A complete Groq free-tier report can take several minutes because requests are paced to stay within token limits. Confirm that the workflow succeeds and the report appears in Discord.
 
-Schedules run from the default branch. Public-repository schedules may be disabled after 60 days of inactivity. Re-enable the workflow in Actions when necessary.
+## Delivery schedule
 
-## Configuration
+Report windows use `America/Toronto`, including daylight saving time. GitHub cron expressions use UTC internally, while the application calculates the correct Toronto reporting window.
 
-| Setting | Location | Purpose |
+| Report | Target window | Content covered |
 | --- | --- | --- |
-| `DISCORD_WEBHOOK_URL` | GitHub Actions repository secret | Required for scheduled channel delivery |
-| `BRIEFING_FORMAT` | GitHub Actions repository variable | `pdf` or `text`; default `pdf` |
-| `DISCORD_BOT_TOKEN` | Local or hosting process environment | Required only for the interactive bot |
-| `CYBERBRIEF_STATE_DIR` | Local or hosting process environment | Persistent directory for bot preferences; default `.state` in the checkout |
-| `AI_API_KEY` | Actions secret or local process environment | Required AI provider key |
-| `AI_PROVIDER` | Actions variable or local process environment | Required provider adapter |
-| `AI_MODEL` | Actions variable or local process environment | Required model identifier available to your account |
-| `AI_BASE_URL` | Actions variable or local process environment | Required for `openai-compatible`; optional override for Groq/OpenRouter; ignored by native provider selections `gemini` and `openai` |
-| `AI_MAX_OUTPUT_TOKENS` | Actions variable or local process environment | Response budget per batch; default 4096 for Groq, 16384 for other providers, subject to model/account limits |
-| `AI_BATCH_SIZE` | Actions variable or local process environment | Updates per request, from 1 to 10; default 1 for Groq and 10 for other providers |
-| `AI_JSON_MODE` | Actions variable or local process environment | `true` by default; set `false` only if the model cannot accept native JSON mode |
-| `AI_GEMINI_TRANSPORT` | Actions variable or local process environment | Gemini only: `auto` (default), `native`, or `openai-compatible` |
-| `AI_REPAIR_ATTEMPTS` | Actions variable or local process environment | `1` by default: allow one evidence-based correction of a rejected report; `0` proceeds directly to validated source fallback after rejection |
+| Daily | Every day after **8:50 AM Toronto time** | Previous local 8:50 AM through the current 8:50 AM |
+| Weekly | Friday after **8:30 AM Toronto time** | Previous Friday 12:00 AM through Thursday 11:59 PM |
 
-### Provider compatibility
+These are **target windows, not exact send times**. GitHub may delay scheduled jobs because of platform load. The workflow provides multiple opportunities across a recovery window and uses a successful-delivery marker so that:
 
-| `AI_PROVIDER` | API interface / default base URL |
+- a delayed opportunity can still deliver the correct completed period;
+- a failed attempt can be followed by another opportunity; and
+- a successful period is not posted twice.
+
+Report generation and Discord upload begin after GitHub starts the job. Collection, Groq generation, validation, and PDF rendering add processing time. For exact-time delivery, run the same command from an external scheduler with a timing guarantee.
+
+Schedules are defined in [.github/workflows/briefing.yml](.github/workflows/briefing.yml). Scheduled workflows run only from the default branch. GitHub may disable schedules in a public repository after 60 days without repository activity; re-enable the workflow from the **Actions** page if that happens.
+
+## Sources
+
+The registry is maintained in [sources.yaml](sources.yaml).
+
+| Role | Sources |
 | --- | --- |
-| `gemini` | Google's native Gemini and OpenAI-compatible interfaces at `generativelanguage.googleapis.com` |
-| `groq` | OpenAI-compatible API: `https://api.groq.com/openai/v1` |
-| `openrouter` | OpenAI-compatible API: `https://openrouter.ai/api/v1` |
-| `openai-compatible` | Your own HTTPS `AI_BASE_URL`, ending at the API base (for example `/v1`) |
-| `openai` | OpenAI-compatible API: `https://api.openai.com/v1` |
-
-Keep `AI_PROVIDER=gemini` for Google Gemini keys. The native interface uses `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`. Google's compatibility interface uses `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`. Both stay on Google's servers and authenticate with the same Gemini key. `AI_BASE_URL` does not override either route. A leading `models/` in `AI_MODEL` is removed before constructing the request, so it is never added twice. See [Google's compatibility documentation](https://ai.google.dev/gemini-api/docs/openai).
-
-`AI_GEMINI_TRANSPORT=auto` tries native generation first. A native HTTP 404, or HTTP 500/502/503/504 after its bounded retries, triggers one request through Google's compatibility interface using the same model and evidence. No model or provider is silently substituted. Set `native` to disable this fallback, or `openai-compatible` to use Google's compatibility interface directly. The latter is useful when the native generation route consistently fails. This option does not require an OpenAI key.
-
-Choose a model your account can access, using its exact provider model ID. Free models and quotas depend on the service and account; this application cannot make a paid model free. Gemini, Groq, and OpenRouter can be configured with available free-tier models. Other services work when they support the OpenAI chat-completions interface. Native APIs with a different protocol require another adapter; an API key alone does not establish compatibility.
-
-Generate your key in the provider console: [Google AI Studio](https://aistudio.google.com/app/apikey), [Groq](https://console.groq.com/keys), or [OpenRouter](https://openrouter.ai/settings/keys). Verify current pricing, model availability, output limits, and quotas there. No model is hardcoded or automatically substituted. Keys must match their provider; a Gemini key cannot authenticate to Groq, for example.
-
-For Gemini, use **Actions → Check Gemini Models → Run workflow** on your default branch to discover current model IDs using the saved `AI_API_KEY`. The workflow lists models that advertise `generateContent` and checks whether the configured `AI_MODEL` appears in that catalog. Read the run summary or **List Gemini generation models** step, then set `AI_MODEL` to the exact ID you choose. Choose a text model with JSON support, rather than an image/audio variant. By default this read-only check does not generate content, collect feeds, or send Discord messages. A listed model may still have account restrictions, paid pricing, insufficient quota, or a temporary outage.
-
-To test generation separately, enable **Also test minimal JSON generation (uses API quota)** when starting **Check Gemini Models**. The additional step tests the configured `AI_MODEL` and `AI_GEMINI_TRANSPORT` without feed collection, report generation, or Discord delivery. It uses one attempt per selected interface: at most two requests in `auto` mode, or one in a single-interface mode. It must receive a complete, valid JSON response to pass. This consumes provider quota and may be billable; passing does not verify the full report's output budget or evidence checks.
-
-The equivalent local commands are `python -m cyberbrief.gemini_models` for listing and `python -m cyberbrief.gemini_models --test-generation` for the optional generation test, with `AI_API_KEY` and, for generation, `AI_MODEL` exported securely. Raw API responses and keys are never printed. HTTP errors include only status and recognized symbolic provider codes, excluding free-form provider messages and metadata.
-
-Selected updates are processed in batches. Groq defaults to one update per request with a 4096-token response budget, avoiding a large all-update request against free-tier limits. Every update retains its complete packed evidence; batching does not truncate facts or reduce the number selected. Results are merged in original order and validated again. A multi-update HTTP 413 response triggers smaller batches. If one update alone still exceeds the provider budget, that update uses the validated source fallback while the remaining updates continue normally. No source evidence is silently discarded.
-
-Groq requests use available `x-ratelimit-remaining-tokens` and `x-ratelimit-reset-tokens` headers to pace subsequent requests, including correction calls. A conservative input-plus-output estimate can cause a pause of up to 65 seconds before a later request. Groq correction responses are capped at 2048 tokens, or the configured lower limit, because their input includes both the complete evidence and the rejected draft. The initial report keeps its configured response budget, and correction evidence is never truncated. Headers are not guaranteed, and pacing does not raise account quotas or guarantee acceptance. Allow several minutes for a full report; the scheduled delivery job has a 40-minute timeout.
-
-If Groq returns `JSON_VALIDATE_FAILED` during initial generation or an evidence-based correction, the application retries that request once without Groq's provider-enforced JSON mode. The same instructions are used, and the response must still parse as JSON and pass every local schema and evidence check. This retry is bounded to one additional request and can consume free-tier quota. A second provider output rejection uses the validated source fallback for the affected batch instead of cancelling the report.
-
-Temporary HTTP 500, 502, 503, and 504 responses are retried up to two times per batch (three attempts total), with delays of 10 and 20 seconds. Gemini `auto` mode allows one additional request through Google's compatibility interface after an eligible native failure, for at most four generation attempts per batch. A provider's `Retry-After` header can extend a delay up to 60 seconds; a longer requested wait proceeds to validated source fallback. Retries, smaller batches, and fallback requests can count against provider quotas or billing. Logs report retry status, safe token-limit numbers, and attempt counts without exposing credentials, organization IDs, or raw provider response bodies.
-
-After configuration has been loaded and sources have been collected, provider authentication, rate-limit, network, model-access, incomplete-response, and locally invalid JSON failures use validated source fallback. A hard provider failure stops further AI calls in that build so ten identical failed requests do not consume time or quota; remaining updates are built from their collected evidence. The Discord message and report disclose the fallback count. Missing required configuration still fails before collection. Source collection and Discord delivery are not repeated by AI retries. If Groq consistently rejects provider-enforced JSON mode despite the bounded retry, set `AI_JSON_MODE=false` to avoid the rejected first request; output must still parse as JSON and pass all evidence checks. Increase/decrease the output budget only within the selected model's supported limits.
-
-Valid JSON can still fail the report schema or evidence checks. A one-story batch's opaque story ID and evidence-ID prefix are restored deterministically, and the application attaches the exact source entry selected by the model when the model miscopies its quotation. These changes do not alter generated claims. Remaining failures identify a specific field and rule, such as `stories[0].bullets[0].text [unsupported_fact_token]`. By default, each rejected batch receives one correction request containing its original evidence, rejected draft, and exact validation error. The complete corrected report must pass the same validator; version/CVE support, story order, and summary limits are never relaxed. Correction requests consume additional provider quota and may be billable. Set `AI_REPAIR_ATTEMPTS=0` to skip the correction and proceed to source fallback. A correction uses one attempt per selected interface, so Gemini `auto` may make two requests for that single correction; other providers make one.
-
-If a generated batch remains invalid after correction, the application rejects that AI draft and constructs the affected updates from the collected source evidence. The fallback uses exact source text for its summary and detailed sections, passes the same schema/evidence validator, keeps per-update references, and is labeled in the PDF, text report, Discord message, and `briefing.json` under `ai.source_fallbacks`. Valid AI updates remain unchanged. This preserves scheduled delivery without allowing unsupported AI text into the report.
-
-Failed Actions builds upload available `source-report.json` and `validation-error.json` files in a `briefing-diagnostics` artifact retained for seven days. Failures that safely recover through source fallback are recorded in the successful `briefing.json` artifact instead. Diagnostics never include rejected AI text or credentials. A later build clears stale validation diagnostics before attempting generation.
-
-To switch to OpenAI later, replace the repository secret `AI_API_KEY` with your OpenAI API key, set `AI_PROVIDER=openai`, and set `AI_MODEL` to an exact model available to that account. OpenAI uses the fixed `https://api.openai.com/v1` base and `max_completion_tokens`; a leftover Gemini `AI_BASE_URL` or `AI_GEMINI_TRANSPORT` cannot redirect an OpenAI key to Google. Custom OpenAI-compatible hosts must select `AI_PROVIDER=openai-compatible` explicitly. The application does not switch providers or reuse keys between Google and OpenAI automatically.
-
-Existing installations should replace `OPENAI_API_KEY`/`OPENAI_MODEL` with `AI_API_KEY`/`AI_MODEL` and set `AI_PROVIDER`. The old optional excerpt-selection integration has been removed.
-
-[.env.example](.env.example) contains empty credential placeholders. A local `.env` file is ignored by Git, but **is not automatically loaded**. Export variables through your shell or hosting secret manager. Never commit credentials or populate `.env.example` with real secrets.
-
-## Sources and evidence handling
-
-The single AI instruction file is [SKILL.md](SKILL.md). `SKILLS.md` has been removed; there are no separate, conflicting excerpt and detailed-report prompts.
-
-The source registry is [sources.yaml](sources.yaml).
-
-| Category | Sources |
-| --- | --- |
-| Government advisories | Canadian Centre for Cyber Security; CISA official CSAF IT/OT/VA repository |
+| Government | Canadian Centre for Cyber Security; CISA CSAF advisories and KEV enrichment |
 | Vendor advisories | Microsoft MSRC; Cisco Security Advisories; Fortinet PSIRT |
 | Threat research | Google Threat Intelligence / Mandiant; Cisco Talos |
-| News and discovery | The Record; BleepingComputer; The Hacker News |
+| Reporting and discovery | The Record; BleepingComputer; The Hacker News |
 
-The collection pipeline discovers updates, retrieves available advisory details, merges matching CVE/title duplicates, and selects up to ten updates. Publisher rounds limit each source to three selected updates. Known-exploitation signals and substantive advisories take priority over routine release notices; primary sources lead when duplicates merge.
+Primary advisories take priority when duplicate coverage is available. Publisher balancing limits the selected report to three updates from one publisher. Source retrieval failures and missing evidence remain visible as coverage warnings.
 
-Cisco advisory sections, Microsoft CVRF records, Fortinet version/fix tables, and CISA CSAF documents provide structured technical evidence. Other publishers use article headings and paragraphs. The three latest Fortinet entries published within 30 days are checked for revisions; original publication dates and day-precision revision dates remain explicit.
+## AI generation and validation
 
-CISA's official `cisagov/CSAF` repository is used because its website feed rejected cloud requests during validation. Each advisory is checked against its published SHA-512 checksum. This collection is not guaranteed to mirror every website RSS item. Retrieval covers the requested start date, or eight days for rolling reports, with up to 30 records per collection. Two latest records are retrieved when a collection has no updates in that window.
+Cyber Feed sends the collected evidence to Groq in small batches. The default setup uses one update per request and a 4096-token output budget to fit typical free-tier limits.
 
-CISA Known Exploited Vulnerabilities (KEV) data enriches referenced CVEs. The official `cisagov/kev-data` mirror is used when the website catalog is unavailable. KEV membership verifies catalog inclusion only; it does not independently verify all claims, products, or actor attributions in a report.
+Generated content must pass local checks for:
 
-Source excerpts, dates, and supporting links are retained. Missing fields and retrieval failures are reported explicitly. Feed availability and extraction quality depend on upstream sources; consult the complete advisory before applying remediation.
+- the required report structure and story order;
+- valid evidence identifiers and exact supporting quotations;
+- source-supported CVE and version references; and
+- evidence-backed diagram steps and relationships.
+
+When a draft fails validation, Cyber Feed requests one correction. If the correction still fails, the affected update uses a clearly labeled, validated source fallback. Valid AI updates stay unchanged, and the scheduled report can still be delivered without accepting unsupported AI text.
+
+The fallback count is shown in the Discord message and report metadata. It means the report used collected source text for those updates; it does not mean the entire report failed.
+
+Advanced Groq settings are optional:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AI_MAX_OUTPUT_TOKENS` | `4096` | Maximum generated tokens per request |
+| `AI_BATCH_SIZE` | `1` | Updates sent in each Groq request |
+| `AI_JSON_MODE` | `true` | Ask Groq to enforce JSON output; local validation always remains active |
+| `AI_REPAIR_ATTEMPTS` | `1` | Correction attempts before validated source fallback |
+
+Do not change these defaults unless the Groq account's current limits require it. A full run can make several API requests and consume free-tier quota.
 
 ## Local installation
 
-Python **3.11 or later** is required. Development checks have been run with Python 3.12.
-
-After forking, replace `YOUR-USERNAME` with your GitHub account:
+Python 3.11 or later is required.
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/CyberFeed.git
+git clone https://github.com/infosecmanav/CyberFeed.git
 cd CyberFeed
 python3 -m venv .venv
-```
-
-On Windows, use `python -m venv .venv` if `python3` is unavailable.
-
-Activate the environment:
-
-```bash
-# macOS / Linux
 source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
+
+On Windows PowerShell, activate the environment with:
 
 ```powershell
-# Windows PowerShell
 .venv\Scripts\Activate.ps1
 ```
 
-Install dependencies and export your AI configuration. For macOS zsh, use a hidden key prompt (replace the provider and model with your account's settings):
+Export the Groq configuration in the terminal that will run Cyber Feed:
 
-```zsh
-python -m pip install -r requirements.txt
-read -s "AI_API_KEY?AI provider key: "
+```bash
+export AI_PROVIDER="groq"
+export AI_MODEL="openai/gpt-oss-120b"
+read -s -p "Groq API key: " AI_API_KEY
 echo
 export AI_API_KEY
-export AI_PROVIDER="gemini"
-export AI_MODEL="YOUR-MODEL-ID"
 ```
 
-For Windows PowerShell:
+For macOS `zsh`, use `read -s "AI_API_KEY?Groq API key: "` instead of the Bash `read` command above.
 
-```powershell
-python -m pip install -r requirements.txt
-$secureKey = Read-Host "AI provider key" -AsSecureString
-$env:AI_API_KEY = [System.Net.NetworkCredential]::new("", $secureKey).Password
-$env:AI_PROVIDER = "gemini"
-$env:AI_MODEL = "YOUR-MODEL-ID"
-```
-
-Generate the report:
+Build a local report:
 
 ```bash
-python -m pip install -r requirements.txt
-python -m cyberbrief.cli build --period weekly --scheduled-window --format all --strict --out site
+python -m cyberbrief.cli build --ai --period daily --format all --out site
 ```
 
-The output directory contains `briefing.json`, `briefing.txt`, and `briefing.pdf`. No Discord credential is required for local generation, but the AI key/provider/model are required.
+The `site` directory will contain `briefing.json`, `briefing.txt`, and `briefing.pdf`. Use `--period weekly` for a weekly report and add `--scheduled-window` to use the completed Toronto delivery window.
 
-`--strict` returns exit status 2 when coverage errors exist, while retaining diagnostic output. Without that flag, partial reports include explicit warnings. The scheduled workflow sends partial reports with those warnings; unexpected build or delivery errors fail the job.
+A local `.env` file is ignored by Git but is **not loaded automatically**. Export variables in your shell or use a secret manager. Never commit an API key, webhook URL, or Discord bot token.
 
-`--source-only` is an explicit diagnostic mode for collecting factual evidence without an AI call. It is not the scheduled delivery mode. `--fixtures` also bypasses AI for fictional offline tests.
+## Optional interactive Discord bot
 
-Without `--scheduled-window`, reports use rolling windows of 36 hours for daily and seven days for weekly. `--fixtures` generates clearly labeled fictional demonstration data.
-
-## AI report generation
-
-The AI report repeats the following structure **for each update**:
-
-**a. Summary** — concise, evidence-supported bullets.
-
-**b. Detailed Reports (powered by AI)** — relevant technical facts, prerequisites, affected versions, exploitation evidence, patches, and workarounds. Detail has no arbitrary word target; missing facts are marked explicitly, and repetition or unsupported expansion is excluded.
-
-**c. References** — the update's source links, dates where supplied, and inline citations.
-
-Diagrams are optional. They are included only when they improve understanding and the evidence supports every step and relationship. A generic attack chain must not be inserted to fill missing information.
-
-The report uses a black background, blue accents, and light text; a light version is available for printing.
-
-- [Dark PDF sample](docs/editorial-preview/dark.pdf)
-- [Light PDF sample](docs/editorial-preview/light.pdf)
-- [First-page preview](docs/editorial-preview/dark-preview.png)
-- [Evidence and sample output](docs/editorial-preview/README.md)
-- [Portable agent instructions](SKILL.md)
-
-These samples use historical evidence and are not newly fetched reports. Download PDFs through GitHub's download/raw control.
-
-To prepare and render agent output locally:
+Scheduled webhook delivery does not need a bot token. The optional bot provides private, on-demand `/briefing` commands and must run continuously on your own host.
 
 ```bash
-python -m cyberbrief.editorial pack --input site/briefing.json --output evidence.json
-# Supply SKILL.md and evidence.json to your chosen agent; save its JSON as summary.json.
-python -m cyberbrief.editorial render --input evidence.json --summary summary.json --output preview.pdf --theme dark
-```
-
-Use `--theme light` for print styling. Full supplied evidence is retained by default; `--detail-level compact` reduces input size but may omit material detail. Upstream excerpts may already be truncated.
-
-Validation checks structure, evidence IDs, exact quotations, and diagram relationships. These checks do not establish that every paraphrase follows from its citation; semantic review remains necessary. The standalone `pack`/`render` commands support manual editorial review; standard report generation invokes the configured provider and validates its output before rendering.
-
-## Interactive Discord bot
-
-The bot is optional and separate from scheduled webhook delivery. It requires a continuously running process.
-
-1. Create an application and bot in the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Invite it with `bot` and `applications.commands` scopes and **View Channels**, **Send Messages**, and **Attach Files** permissions. Privileged message-content intent is unnecessary.
-3. Export `AI_API_KEY`, `AI_PROVIDER`, `AI_MODEL`, and `DISCORD_BOT_TOKEN` securely, then start the bot. The bot checks AI configuration before connecting.
-
-For macOS zsh:
-
-```zsh
-read -s "DISCORD_BOT_TOKEN?Discord bot token: "
-echo
-export DISCORD_BOT_TOKEN
+export AI_PROVIDER="groq"
+export AI_MODEL="openai/gpt-oss-120b"
+export AI_API_KEY="YOUR_GROQ_KEY"
+export DISCORD_BOT_TOKEN="YOUR_DISCORD_BOT_TOKEN"
 python -m cyberbrief.discord_bot
 ```
 
-For Windows PowerShell:
-
-```powershell
-$secureToken = Read-Host "Discord bot token" -AsSecureString
-$env:DISCORD_BOT_TOKEN = [System.Net.NetworkCredential]::new("", $secureToken).Password
-python -m cyberbrief.discord_bot
-```
-
-Slash commands synchronize at startup and may take time to appear. In a Discord channel, run:
+Available commands:
 
 ```text
 /briefing_settings format:pdf
@@ -299,42 +208,23 @@ Slash commands synchronize at startup and may take time to appear. In a Discord 
 /briefing period:daily format:text
 ```
 
-Responses are private to the requesting user. Preferences are stored in `.state/preferences.sqlite3`; use a persistent `CYBERBRIEF_STATE_DIR` for hosted deployments. Text reports exceeding five messages use an attachment. Closing the bot process stops slash-command delivery but does not affect GitHub Actions.
-
-## Security and operational considerations
-
-- Store webhook URLs, bot tokens, and API keys in secret configuration. Rotate exposed credentials at their issuing service.
-- Preserve TLS verification and advisory checksum checks.
-- Network policy must allow source feeds, article/redirect hosts, official GitHub mirrors, and the relevant Discord endpoints.
-- Do not rerun a completed delivery unless another channel post is intended. Uncertain webhook requests are not automatically retried.
-- Interactive responses are private; scheduled webhook reports are visible to members with access to the destination channel.
-- Report artifacts remain in GitHub Actions for seven days. Local reports and preference databases follow the host's retention policy.
+Preferences are stored in `.state/preferences.sqlite3`. Closing the process stops on-demand commands but does not affect scheduled GitHub Actions delivery.
 
 ## Troubleshooting
 
-| Symptom | Action |
+| Problem | What to check |
 | --- | --- |
-| `No module named discord` | Activate `.venv` and install `requirements.txt` with its Python interpreter. |
-| AI configuration missing | Set `AI_API_KEY`, `AI_PROVIDER`, and `AI_MODEL`; `.env` is not auto-loaded. |
-| AI HTTP 404 | The scheduled build uses validated source fallback and discloses it in the report. Check `AI_PROVIDER`, the exact `AI_MODEL` available to your account, and any custom `AI_BASE_URL` to restore AI-written updates. For Gemini, run **Check Gemini Models** in Actions to discover advertised model IDs. |
-| AI HTTP 400 | Read the safe provider code, error type, and rejected parameter in the log. `JSON_VALIDATE_FAILED` means the model failed the provider's JSON generation check; for Groq, one bounded request without provider JSON mode is allowed while all local validation remains active. Other 400 responses can indicate rejected request parameters and are not automatically retried. Raw provider messages and rejected generations are never printed. |
-| AI HTTP 503 or other temporary server failure | The client retries HTTP 500, 502, 503, and 504 up to three attempts per primary interface. Gemini `auto` mode can make one further request through Google's compatibility interface. If all attempts fail, the scheduled build uses validated source fallback. |
-| AI HTTP 429 | The scheduled build uses validated source fallback rather than retrying an exhausted free-tier quota. Check the provider's rate limits to restore AI-written updates. |
-| AI HTTP 413 | The request exceeds a provider size/token budget. Groq defaults to `AI_BATCH_SIZE=1` and `AI_MAX_OUTPUT_TOKENS=4096`; remove stale larger overrides or set these values explicitly. Multi-update requests are split without dropping evidence. A single-update failure uses validated source fallback. |
-| AI response rejected | Read the exact validation field/rule in the log. One evidence-based correction is allowed by default. If it remains invalid, the affected update uses clearly labeled, validated source fallback; unsupported AI text is never delivered. |
-| Token missing despite `.env` | Export the variable; `.env` is not auto-loaded. |
-| Bot does not return to the prompt | A connected bot runs continuously. Check gateway connection logs or the reported error. |
-| Slash command unavailable | Verify server installation, command scope, bot process, and synchronization. |
-| Scheduled report missing | Check Actions is enabled, the webhook secret exists in your fork, and the workflow logs. Allow for schedule delays. |
-| Coverage warnings | Inspect the named source failures and its original advisory; missing evidence is not replaced with fabricated content. |
+| No scheduled report | Open **Actions → Scheduled Discord Briefings**. Confirm the workflow is enabled and allow for GitHub scheduling delays. |
+| Manual workflow does not deliver | Confirm both repository secrets exist, the Discord webhook is valid, and the selected channel permits webhook posts. |
+| AI configuration missing | Set `AI_API_KEY`, `AI_PROVIDER=groq`, and `AI_MODEL=openai/gpt-oss-120b`. Remember that `.env` is not auto-loaded. |
+| HTTP 401 | Replace the Groq key in the `AI_API_KEY` repository secret. Check that the key is active and was copied without extra characters. |
+| HTTP 413 | Remove stale overrides or use `AI_BATCH_SIZE=1` and `AI_MAX_OUTPUT_TOKENS=4096`. |
+| HTTP 429 | The Groq free-tier quota or rate limit is exhausted. The report uses source fallback where possible; wait for the provider limit to reset. |
+| AI output rejected | Read the exact validation field in the log. The workflow requests one correction, then uses validated source fallback for that update. |
+| Coverage warnings | One or more sources could not be retrieved or parsed. Review the named source and its original advisory. |
+| `No module named discord` | Activate `.venv` and install `requirements.txt` using that environment's Python interpreter. |
 
-For macOS certificate failures, run the Python installation's `Install Certificates.command`. If necessary, use a trusted CA bundle without disabling verification:
-
-```zsh
-python -m pip install --upgrade certifi
-export SSL_CERT_FILE="$(python -m certifi)"
-python -m cyberbrief.discord_bot
-```
+Generated JSON, text, PDF, and safe diagnostic files are retained as GitHub Actions artifacts for seven days. Rejected AI text and credentials are not stored in diagnostics.
 
 ## Development
 
@@ -344,4 +234,12 @@ python -m pytest -q
 python -m cyberbrief.cli build --fixtures --period weekly --format all --strict --out site
 ```
 
-Provider-adapter and rendering tests use mocked API responses; a credentialed provider test is still required in your installation. Tests cover extraction, source selection, checksum verification, schedule boundaries and daylight saving changes, preferences, report rendering, editorial citations, optional diagrams, and mocked Discord delivery. Verify live delivery using the configured destination and credentials; mocked tests do not establish successful external delivery.
+The [Tests workflow](.github/workflows/test.yml) runs on pushes to `main` and on pull requests. The portable report instructions are in [SKILL.md](SKILL.md), and design samples are available in [docs/editorial-preview](docs/editorial-preview/README.md).
+
+## Security
+
+- Store Groq keys, webhook URLs, and bot tokens only in GitHub Secrets or a trusted secret manager.
+- Rotate any credential that was pasted into chat, committed, or exposed in logs.
+- Keep TLS verification and advisory checksum checks enabled.
+- Review the linked primary advisory before applying remediation in production.
+- Treat AI text as an evidence-linked briefing, not as authorization to change systems.
